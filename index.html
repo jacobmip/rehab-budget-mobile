@@ -10,7 +10,7 @@
 <title>Rehab Budget Builder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 :root {
   --navy:   #1a3a5c;
@@ -54,6 +54,12 @@ html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--t
 .chips{background:var(--card);border-bottom:1px solid var(--border);padding:7px 14px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex-shrink:0;height:29px;padding:0 12px;border:1.5px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;background:var(--bg);color:var(--muted);cursor:pointer;white-space:nowrap;display:flex;align-items:center;-webkit-user-select:none;user-select:none;transition:all .12s}
+.chip.active{background:var(--navy);border-color:var(--navy);color:#fff}
+.trade-select-wrap{position:relative;flex-shrink:0}
+.trade-select-wrap select{height:29px;padding:0 26px 0 10px;border:1.5px solid var(--border);border-radius:20px;font-family:var(--sans);font-size:11px;font-weight:600;background:var(--bg);color:var(--muted);cursor:pointer;appearance:none;-webkit-appearance:none;outline:none;transition:all .12s;white-space:nowrap}
+.trade-select-wrap select.active{background:var(--navy);border-color:var(--navy);color:#fff}
+.trade-select-wrap::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--muted);pointer-events:none}
+.trade-select-wrap select.active+*,.trade-select-wrap:has(select.active)::after{color:#fff}
 .chip.active{background:var(--navy);border-color:var(--navy);color:#fff}
 
 /* STATS */
@@ -207,6 +213,13 @@ input[type=number]{-moz-appearance:textfield}
   <div class="chip active" onclick="setF('all',this)">All</div>
   <div class="chip" onclick="setF('qty',this)">✓ With Qty</div>
   <div class="chip" onclick="setF('mod',this)">✎ Modified</div>
+  <div class="trade-select-wrap">
+    <select id="trade-dd" onchange="setTradeDD(this)">
+      <option value="">Trade ▾</option>
+    </select>
+  </div>
+  <div class="chip" id="chip-collapse" onclick="toggleCollapseAll(this)">⊟ Collapse All</div>
+  <div class="chip" id="chip-select" onclick="toggleSelectAll(this)">☑ Select All</div>
 </div>
 
 <div class="stats">
@@ -326,7 +339,32 @@ function setF(mode, el) {
   filterMode = mode;
   document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
+  // Reset trade dropdown
+  const dd = document.getElementById('trade-dd');
+  if (dd) { dd.value = ''; dd.classList.remove('active'); }
   render();
+}
+
+function toggleCollapseAll(el) {
+  const allCollapsed = TRADE_ORDER.every(t => collapsed.has(t));
+  if (allCollapsed) {
+    collapsed.clear();
+    el.textContent = '⊟ Collapse All';
+    el.classList.remove('active');
+  } else {
+    TRADE_ORDER.forEach(t => collapsed.add(t));
+    el.textContent = '⊞ Expand All';
+    el.classList.add('active');
+  }
+  render();
+}
+
+function toggleSelectAll(el) {
+  const allSelected = BASE.every(item => IS[item[0]].inc === 1);
+  BASE.forEach(item => { IS[item[0]].inc = allSelected ? 0 : 1; });
+  el.textContent = allSelected ? '☑ Select All' : '☐ Deselect All';
+  el.classList.toggle('active', !allSelected);
+  render(); updateSummary();
 }
 
 // ─── STATE SELECT ─────────────────────────────────────────────────────────────
@@ -346,20 +384,34 @@ STATES.forEach(s => {
   stateGrid.appendChild(c);
 });
 
-// ─── TRADE CHIPS ─────────────────────────────────────────────────────────────
-const chipsEl = document.getElementById('chips');
+// ─── TRADE DROPDOWN ──────────────────────────────────────────────────────────
+const tradeDd = document.getElementById('trade-dd');
 TRADE_ORDER.forEach(t => {
-  const c = document.createElement('div');
-  c.className = 'chip';
-  c.textContent = t.replace(/^\d+\.\s+/, '');
-  c.addEventListener('click', () => {
-    filterMode = 't:' + t;
-    document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
-    c.classList.add('active');
-    render();
-  });
-  chipsEl.appendChild(c);
+  const opt = document.createElement('option');
+  opt.value = t;
+  opt.textContent = t.replace(/^\d+\.\s+/, '');
+  tradeDd.appendChild(opt);
 });
+
+function setTradeDD(sel) {
+  const val = sel.value;
+  // Deactivate the other filter chips
+  document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+  if (val) {
+    filterMode = 't:' + val;
+    sel.classList.add('active');
+    // Scroll to that trade after render
+    setTimeout(() => {
+      const el = document.querySelector(`[data-trade="${CSS.escape(val)}"]`);
+      if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 80);
+  } else {
+    filterMode = 'all';
+    document.querySelector('.chip').classList.add('active'); // re-activate "All"
+    sel.classList.remove('active');
+  }
+  render();
+}
 
 // ─── QTY ─────────────────────────────────────────────────────────────────────
 function adjQ(row, d) {
@@ -576,6 +628,7 @@ function render() {
     const g = document.createElement('div');
     const h = document.createElement('div');
     h.className = 'tg-hdr' + (col ? ' col' : '');
+    h.dataset.trade = trade;
     h.innerHTML = `<span class="th-ch">▾</span><span class="th-nm">${trade}</span>${tradeTot>0?`<span class="th-tt">${fmt(tradeTot)}</span>`:''}`;
     h.addEventListener('click', () => {
       if (collapsed.has(trade)) collapsed.delete(trade);
@@ -679,263 +732,219 @@ function clrSrch() {
 // ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
 function exportXLSX() {
   const activeItems = BASE.filter(i => IS[i[0]].qty > 0);
-  if (activeItems.length === 0) {
+  if (!activeItems.length) {
     alert('No items with quantities yet — add some quantities first.');
     return;
   }
 
-  const wb = XLSX.utils.book_new();
+  const NAVY='1A3A5C', BLUE='2563A8', ORANGE='C55A11', WHITE='FFFFFF';
+  const YELLC='FFFBE6', GBGC='EEF7EE', LBGC='EEF5FB', ALT='EEF5FB';
+  const DGN='1B5E20', DBL='0D47A1', MUTED='6B7D92';
+  const MONEY='$#,##0.00', MONYR='$#,##0';
+  const MED = {style:'medium'}, THIN_C = {style:'thin',color:{rgb:'D0D8E4'}};
 
-  // ── COLORS (ARGB) ──
-  const NAVY   = 'FF1A3A5C';
-  const BLUE   = 'FF2563A8';
-  const WHITE  = 'FFFFFFFF';
-  const GREEN  = 'FF1B5E20';
-  const GBGC   = 'FFEEF7EE';
-  const LBGC   = 'FFEEF5FB';
-  const YELLC  = 'FFFFFBE6';
-  const ORANGC = 'FFC55A11';
-  const DARKGRN= 'FF2E7D32';
-  const DARKBLU= 'FF1565C0';
-  const REDBG  = 'FFFFEBEE';
+  function sf(fill,fontColor,sz,bold,halign,numFmt,italic) {
+    return {
+      fill:{patternType:'solid',fgColor:{rgb:fill||WHITE}},
+      font:{name:'Calibri',sz:sz||10,bold:!!bold,color:{rgb:fontColor||'000000'},italic:!!italic},
+      alignment:{horizontal:halign||'left',vertical:'center',wrapText:false},
+      border:{top:THIN_C,bottom:THIN_C,left:THIN_C,right:THIN_C},
+      numFmt:numFmt||'General'
+    };
+  }
+  function sfm(fill,fontColor,sz,bold,halign,numFmt) { // medium border variant
+    const st = sf(fill,fontColor,sz,bold,halign,numFmt);
+    st.border = {top:MED,bottom:MED,left:MED,right:MED};
+    return st;
+  }
 
-  function cell(v, s) { return { v, s, t: typeof v === 'number' ? 'n' : 's' }; }
+  // ── Build Sheet 1: Rehab Budget Detail ────────────────────────────────────
+  const ws1 = {};
+  const m1 = []; // merges
+  let R = 0;
 
-  // ── SHEET 1: REHAB BUDGET DETAIL ──
-  const ws1Data = [];
+  function sc(r,c,v,style,t) {
+    ws1[XLSX.utils.encode_cell({r,c})] = {v:v??'', t:t||(typeof v==='number'?'n':'s'), s:style};
+  }
+  function blankRow(r,fill) {
+    for(let c=0;c<12;c++) { const a=XLSX.utils.encode_cell({r,c}); if(!ws1[a]) ws1[a]={v:'',t:'s',s:sf(fill||WHITE)}; }
+  }
 
-  // Title row
-  ws1Data.push([
-    { v: `FIX & FLIP REHAB BUDGET — ${activeState} MARKET (Labor ×${lMult.toFixed(2)} / Material ×${mMult.toFixed(2)})`,
-      s: { font:{bold:true,sz:13,color:{rgb:WHITE}}, fill:{fgColor:{rgb:NAVY}},
-           alignment:{horizontal:'left',vertical:'center'} } },
-    ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:NAVY}}} })
-  ]);
+  // Title
+  sc(R,0,`FIX & FLIP REHAB BUDGET — ${activeState} MARKET   ·   Labor ×${lMult.toFixed(2)}  /  Material ×${mMult.toFixed(2)}`,sfm(NAVY,WHITE,14,true,'left'));
+  for(let c=1;c<12;c++) sc(R,c,'',sf(NAVY));
+  m1.push({s:{r:R,c:0},e:{r:R,c:11}}); R++;
 
-  // Subheader
-  ws1Data.push([
-    { v: `Prepared for: Hawaii Real Estate Investments  |  Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  Items with quantities: ${activeItems.length}`,
-      s:{font:{italic:true,sz:9,color:{rgb:'FF444444'}},fill:{fgColor:{rgb:'FFF5F8FF'}},alignment:{horizontal:'left'}} },
-    ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:'FFF5F8FF'}}} })
-  ]);
+  // Subtitle
+  sc(R,0,`Trusted Home Solutions LLC  |  Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  ${activeItems.length} items with quantities`,sfm(BLUE,WHITE,11,true,'left'));
+  for(let c=1;c<12;c++) sc(R,c,'',sf(BLUE));
+  m1.push({s:{r:R,c:0},e:{r:R,c:11}}); R++;
 
-  // Blank row
-  ws1Data.push(Array(11).fill({v:''}));
+  // Info row
+  const infoSt = sf('F0F4FA','444444',9,false,'left');
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  sc(R,0,'  Property:',infoSt);
+  for(let c=1;c<8;c++) sc(R,c,'',infoSt);
+  sc(R,8,`Date: ${today}`,{...infoSt,alignment:{horizontal:'right',vertical:'center'}});
+  for(let c=9;c<12;c++) sc(R,c,'',infoSt);
+  R++;
+
+  // Spacer
+  blankRow(R); R++;
 
   // Column headers
-  const hdrs = ['#','Trade','Category','Description','Spec / Brand','Unit','Qty',
-                 'Mat $/Unit','Labor $/Unit','Mat Total','Labor Total','Line Total'];
-  ws1Data.push(hdrs.map(h => ({
-    v: h,
-    s: { font:{bold:true,sz:10,color:{rgb:WHITE}},
-         fill:{fgColor:{rgb:NAVY}},
-         alignment:{horizontal:'center',vertical:'center',wrapText:true},
-         border:{top:{style:'medium'},bottom:{style:'medium'},left:{style:'medium'},right:{style:'medium'}} }
-  })));
+  const hdrs=[['#','center'],['Trade','left'],['Category','left'],['Description','left'],['Spec / Brand','left'],
+              ['Unit','center'],['Qty','center'],['Mat $/Unit','right'],['Labor $/Unit','right'],
+              ['Mat Total','right'],['Labor Total','right'],['Line Total','right']];
+  hdrs.forEach(([h,al],c) => sc(R,c,h,sfm(NAVY,WHITE,10,true,al)));
+  R++;
 
   // Group by trade
-  const byTrade = {};
-  activeItems.forEach(item => {
-    if (!byTrade[item[2]]) byTrade[item[2]] = [];
-    byTrade[item[2]].push(item);
-  });
+  const byTrade={};
+  activeItems.forEach(i=>{ if(!byTrade[i[2]])byTrade[i[2]]=[]; byTrade[i[2]].push(i); });
 
-  let tradeMats = {}, tradeLabs = {};
-  TRADE_ORDER.forEach((trade, ti) => {
+  let gMat=0, gLab=0;
+
+  TRADE_ORDER.forEach(trade => {
     if (!byTrade[trade]) return;
     const its = byTrade[trade];
+    const tradeTot = its.reduce((s,i)=>{ const p=getPrice(i); return s+p.t; },0);
+    let tM=0, tL=0;
 
-    // Trade header row
-    ws1Data.push([
-      { v: trade,
-        s:{ font:{bold:true,sz:10,color:{rgb:WHITE}},
-            fill:{fgColor:{rgb:BLUE}},
-            alignment:{horizontal:'left',vertical:'center'} } },
-      ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:BLUE}}} })
-    ]);
+    // Trade header — merge cols 0-10, total in col 11
+    const thSt = sfm(BLUE,WHITE,10,true,'left');
+    sc(R,0,trade,thSt);
+    for(let c=1;c<11;c++) sc(R,c,'',sf(BLUE));
+    sc(R,11,tradeTot,{...sfm(BLUE,WHITE,10,true,'right'),numFmt:MONYR},'n');
+    m1.push({s:{r:R,c:0},e:{r:R,c:10}}); R++;
 
-    let tradeM=0, tradeL=0;
-    its.forEach((item, idx) => {
-      const s = IS[item[0]];
-      const mR = getMatRate(item);
-      const lR = getLabRate(item);
-      const mT = mR * s.qty;
-      const lT = lR * s.qty;
-      const tot = mT + lT;
-      tradeM += mT; tradeL += lT;
+    its.forEach((item,idx) => {
+      const s=IS[item[0]], mR=getMatRate(item), lR=getLabRate(item);
+      const mT=mR*s.qty, lT=lR*s.qty, tot=mT+lT;
+      tM+=mT; tL+=lT;
+      const bg = idx%2===0 ? WHITE : ALT;
 
-      const shade = idx % 2 === 0 ? WHITE : 'FFF7F9FC';
-      const bord = { top:{style:'thin',color:{rgb:'FFD8E2EF'}}, bottom:{style:'thin',color:{rgb:'FFD8E2EF'}},
-                     left:{style:'thin',color:{rgb:'FFD8E2EF'}}, right:{style:'thin',color:{rgb:'FFD8E2EF'}} };
-      const base = { fill:{fgColor:{rgb:shade}}, border:bord, alignment:{vertical:'center'} };
-
-      const modified = IS[item[0]].matOvr !== null || IS[item[0]].labOvr !== null;
-
-      ws1Data.push([
-        { v:item[1], s:{...base, font:{sz:9,bold:true}, alignment:{horizontal:'center',vertical:'center'}} },
-        { v:item[2].replace(/^\d+\.\s+/,''), s:{...base,font:{sz:9,color:{rgb:'FF6B7D92'}}} },
-        { v:item[3]||'', s:{...base,font:{sz:9,color:{rgb:'FF6B7D92'}}} },
-        { v:item[4], s:{...base,font:{sz:10,bold:true}} },
-        { v:item[5]||'', s:{...base,font:{sz:9,italic:true,color:{rgb:'FF6B7D92'}}} },
-        { v:item[6], s:{...base,font:{sz:10,color:{rgb:'FF6B7D92'}},alignment:{horizontal:'center',vertical:'center'}} },
-        { v:s.qty, s:{...base,font:{sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},fill:{fgColor:{rgb:YELLC}}} },
-        { v:mR>0?mR:0, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},
-            numFmt:'$#,##0.00',alignment:{horizontal:'right',vertical:'center'}} },
-        { v:lR>0?lR:0, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},
-            numFmt:'$#,##0.00',alignment:{horizontal:'right',vertical:'center'}} },
-        { v:mT, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},
-            numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-        { v:lT, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},
-            numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-        { v:tot, t:'n', s:{...base,font:{sz:10,bold:tot>0},
-            fill:{fgColor:{rgb:tot>0?'FFE8F5E9':shade}},numFmt:'$#,##0',
-            alignment:{horizontal:'right',vertical:'center'}} },
-      ]);
+      sc(R,0,item[1],  sf(bg,'000000',9,true,'center'));
+      sc(R,1,item[2].replace(/^\d+\.\s+/,''), sf(bg,MUTED,9,false,'left'));
+      sc(R,2,item[3]||'',sf(bg,MUTED,9,false,'left'));
+      sc(R,3,item[4],  sf(bg,'000000',10,true,'left'));
+      sc(R,4,item[5]||'',sf(bg,MUTED,9,false,'left',undefined,true));
+      sc(R,5,item[6],  sf(bg,'000000',10,false,'center'));
+      sc(R,6,s.qty,    sf(YELLC,'000000',11,true,'center'),'n');
+      if(mR>0) sc(R,7,mR,  sf(GBGC,DGN,10,false,'right',MONEY),'n');
+      else     sc(R,7,'—', sf(bg,MUTED,10,false,'center'));
+      if(lR>0) sc(R,8,lR,  sf(LBGC,DBL,10,false,'right',MONEY),'n');
+      else     sc(R,8,'—', sf(bg,MUTED,10,false,'center'));
+      sc(R,9,mT,   sf(GBGC,DGN,10,false,'right',MONYR),'n');
+      sc(R,10,lT,  sf(LBGC,DBL,10,false,'right',MONYR),'n');
+      sc(R,11,tot, sf(tot>0?'EAF4EA':bg,tot>0?DGN:'000000',10,tot>0,'right',MONYR),'n');
+      R++;
     });
 
-    tradeMats[trade] = tradeM;
-    tradeLabs[trade] = tradeL;
+    // Subtotal
+    gMat+=tM; gLab+=tL;
+    sc(R,0,`SUBTOTAL — ${trade}`,sfm(NAVY,WHITE,9,true,'left'));
+    for(let c=1;c<9;c++) sc(R,c,'',sf(NAVY));
+    sc(R,9,tM,  {numFmt:MONYR,...sfm(GBGC,DGN,10,true,'right')},'n');
+    sc(R,10,tL, {numFmt:MONYR,...sfm(LBGC,DBL,10,true,'right')},'n');
+    sc(R,11,tM+tL,{numFmt:MONYR,...sfm(NAVY,WHITE,11,true,'right')},'n');
+    m1.push({s:{r:R,c:1},e:{r:R,c:8}}); R++;
 
-    // Trade subtotal
-    const tTot = tradeM + tradeL;
-    ws1Data.push([
-      { v:`SUBTOTAL — ${trade}`, s:{font:{bold:true,sz:9,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-          alignment:{horizontal:'left',vertical:'center'}} },
-      ...Array(8).fill({ v:'', s:{fill:{fgColor:{rgb:NAVY}}} }),
-      { v:tradeM, t:'n', s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-      { v:tradeL, t:'n', s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-      { v:tTot, t:'n', s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-    ]);
-    ws1Data.push(Array(12).fill({v:''})); // spacer
+    blankRow(R); R++;
   });
 
   // Grand totals
-  let gMat=0, gLab=0;
-  activeItems.forEach(i => { const p=getPrice(i); gMat+=p.m; gLab+=p.l; });
-  const grand = gMat + gLab;
-  const cont = grand * 0.1;
+  blankRow(R); R++;
 
-  ws1Data.push(Array(12).fill({v:''}));
-  ws1Data.push([
-    { v:'TOTAL REHAB BUDGET', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-        alignment:{horizontal:'right',vertical:'center'}} },
-    ...Array(8).fill({v:'',s:{fill:{fgColor:{rgb:NAVY}}}}),
-    { v:gMat, t:'n', s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-    { v:gLab, t:'n', s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-    { v:grand, t:'n', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-  ]);
-  ws1Data.push([
-    { v:'10% Contingency Reserve', s:{font:{italic:true,sz:10,color:{rgb:'FF7A5800'}},
-        fill:{fgColor:{rgb:YELLC}},alignment:{horizontal:'right',vertical:'center'}} },
-    ...Array(10).fill({v:'',s:{fill:{fgColor:{rgb:YELLC}}}}),
-    { v:cont, t:'n', s:{font:{bold:true,sz:11,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},
-        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-  ]);
-  ws1Data.push([
-    { v:'TOTAL WITH CONTINGENCY', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},
-        alignment:{horizontal:'right',vertical:'center'}} },
-    ...Array(10).fill({v:'',s:{fill:{fgColor:{rgb:ORANGC}}}}),
-    { v:grand+cont, t:'n', s:{font:{bold:true,sz:14,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},
-        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
-  ]);
+  sc(R,0,'TOTAL REHAB BUDGET',sfm(NAVY,WHITE,13,true,'left'));
+  for(let c=1;c<9;c++) sc(R,c,'',sf(NAVY));
+  sc(R,9,gMat,  {numFmt:MONYR,...sfm(GBGC,DGN,12,true,'right')},'n');
+  sc(R,10,gLab, {numFmt:MONYR,...sfm(LBGC,DBL,12,true,'right')},'n');
+  sc(R,11,gMat+gLab,{numFmt:MONYR,...sfm(NAVY,WHITE,13,true,'right')},'n');
+  m1.push({s:{r:R,c:0},e:{r:R,c:8}}); R++;
 
-  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+  const grand=gMat+gLab;
+  sc(R,0,'+ 10% Contingency Reserve',{...sf(YELLC,'7A5800',10,false,'left',undefined,true)});
+  for(let c=1;c<11;c++) sc(R,c,'',sf(YELLC,'7A5800'));
+  sc(R,11,grand*0.1,{numFmt:MONYR,...sf(YELLC,'7A5800',11,true,'right')},'n');
+  m1.push({s:{r:R,c:0},e:{r:R,c:10}}); R++;
 
-  // Column widths
-  ws1['!cols'] = [
-    {wch:5},{wch:18},{wch:16},{wch:38},{wch:30},{wch:6},
-    {wch:6},{wch:12},{wch:12},{wch:12},{wch:12},{wch:13}
-  ];
+  sc(R,0,'TOTAL WITH CONTINGENCY',sfm(ORANGE,WHITE,13,true,'left'));
+  for(let c=1;c<11;c++) sc(R,c,'',sf(ORANGE));
+  sc(R,11,grand*1.1,{numFmt:MONYR,...sfm(ORANGE,WHITE,14,true,'right')},'n');
+  m1.push({s:{r:R,c:0},e:{r:R,c:10}}); R++;
 
-  // Row heights
-  ws1['!rows'] = [
-    {hpt:30},{hpt:18},{hpt:8},{hpt:28},
-    ...ws1Data.slice(4).map(() => ({hpt:18}))
-  ];
+  ws1['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R-1,c:11}});
+  ws1['!cols'] = [{wch:5},{wch:18},{wch:16},{wch:38},{wch:30},{wch:6},{wch:6},{wch:12},{wch:12},{wch:12},{wch:12},{wch:13}];
+  ws1['!rows'] = [{hpt:30},{hpt:20},{hpt:16},{hpt:6},{hpt:22}];
+  ws1['!merges'] = m1;
 
-  // Merge title rows across all 12 columns
-  ws1['!merges'] = [
-    {s:{r:0,c:0},e:{r:0,c:11}},
-    {s:{r:1,c:0},e:{r:1,c:11}},
-  ];
+  // ── Build Sheet 2: Trade Summary ──────────────────────────────────────────
+  const ws2 = {};
+  const m2 = [];
+  let R2 = 0;
 
-  XLSX.utils.book_append_sheet(wb, ws1, 'Rehab Budget Detail');
+  function sc2(r,c,v,style,t) {
+    ws2[XLSX.utils.encode_cell({r,c})] = {v:v??'',t:t||(typeof v==='number'?'n':'s'),s:style};
+  }
 
-  // ── SHEET 2: TRADE SUMMARY ──
-  const ws2Data = [];
-  ws2Data.push([
-    { v:'REHAB BUDGET — TRADE SUMMARY', s:{font:{bold:true,sz:14,color:{rgb:WHITE}},
-        fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'left',vertical:'center'}} },
-    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
-    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
-    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
-  ]);
-  ws2Data.push([
-    { v:`Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  Labor ×${lMult.toFixed(2)}  |  Material ×${mMult.toFixed(2)}`,
-      s:{font:{italic:true,sz:9,color:{rgb:'FF444444'}},fill:{fgColor:{rgb:'FFF5F8FF'}}} },
-    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
-    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
-    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
-  ]);
-  ws2Data.push(Array(4).fill({v:''}));
+  sc2(R2,0,'REHAB BUDGET — TRADE SUMMARY',sfm(NAVY,WHITE,14,true,'left'));
+  for(let c=1;c<4;c++) sc2(R2,c,'',sf(NAVY));
+  m2.push({s:{r:R2,c:0},e:{r:R2,c:3}}); R2++;
 
-  const sumHdrs = ['Trade','Materials','Labor','Total'];
-  ws2Data.push(sumHdrs.map(h => ({
-    v:h, s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
-             alignment:{horizontal:h==='Trade'?'left':'right',vertical:'center'},
-             border:{top:{style:'medium'},bottom:{style:'medium'},left:{style:'medium'},right:{style:'medium'}}}
-  })));
+  sc2(R2,0,`Trusted Home Solutions LLC  |  Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  Labor ×${lMult.toFixed(2)}  |  Material ×${mMult.toFixed(2)}`,sfm(BLUE,WHITE,10,false,'left'));
+  for(let c=1;c<4;c++) sc2(R2,c,'',sf(BLUE));
+  m2.push({s:{r:R2,c:0},e:{r:R2,c:3}}); R2++;
 
-  let sumGM=0, sumGL=0;
+  for(let c=0;c<4;c++) sc2(R2,c,'',sf(WHITE)); R2++;
+
+  ['Trade','Materials','Labor','Total'].forEach((h,c) =>
+    sc2(R2,c,h,sfm(NAVY,WHITE,10,true,c===0?'left':'right')));
+  R2++;
+
+  let sM=0, sL=0;
   TRADE_ORDER.forEach((t,ti) => {
-    const its = BASE.filter(i => i[2]===t);
-    const m = its.reduce((s,i)=>s+getPrice(i).m,0);
-    const l = its.reduce((s,i)=>s+getPrice(i).l,0);
-    const tot = m+l;
-    if (tot===0) return;
-    sumGM+=m; sumGL+=l;
-    const shade = ti%2===0?WHITE:LBGC;
-    const bord = {top:{style:'thin',color:{rgb:'FFD8E2EF'}},bottom:{style:'thin',color:{rgb:'FFD8E2EF'}},
-                  left:{style:'thin',color:{rgb:'FFD8E2EF'}},right:{style:'thin',color:{rgb:'FFD8E2EF'}}};
-    ws2Data.push([
-      {v:t,s:{font:{sz:10},fill:{fgColor:{rgb:shade}},border:bord,alignment:{horizontal:'left',vertical:'center'}}},
-      {v:m,t:'n',s:{font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-      {v:l,t:'n',s:{font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-      {v:tot,t:'n',s:{font:{sz:10,bold:true},fill:{fgColor:{rgb:shade}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-    ]);
+    const its = BASE.filter(i=>i[2]===t);
+    const m=its.reduce((s,i)=>s+getPrice(i).m,0);
+    const l=its.reduce((s,i)=>s+getPrice(i).l,0);
+    const tot=m+l;
+    if(tot===0) return;
+    sM+=m; sL+=l;
+    const bg = ti%2===0 ? WHITE : ALT;
+    sc2(R2,0,t,   sf(bg,'000000',10,false,'left'));
+    sc2(R2,1,m,   sf(GBGC,DGN,10,false,'right',MONYR),'n');
+    sc2(R2,2,l,   sf(LBGC,DBL,10,false,'right',MONYR),'n');
+    sc2(R2,3,tot, sf(bg,'000000',10,true,'right',MONYR),'n');
+    R2++;
   });
 
-  const sumGrand = sumGM+sumGL;
-  ws2Data.push(Array(4).fill({v:''}));
-  ws2Data.push([
-    {v:'TOTAL REHAB',s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'left',vertical:'center'}}},
-    {v:sumGM,t:'n',s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-    {v:sumGL,t:'n',s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-    {v:sumGrand,t:'n',s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-  ]);
-  ws2Data.push([
-    {v:'+ 10% Contingency',s:{font:{italic:true,sz:10,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},alignment:{horizontal:'left',vertical:'center'}}},
-    {v:'',s:{fill:{fgColor:{rgb:YELLC}}}},{v:'',s:{fill:{fgColor:{rgb:YELLC}}}},
-    {v:sumGrand*.1,t:'n',s:{font:{bold:true,sz:11,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-  ]);
-  ws2Data.push([
-    {v:'TOTAL WITH CONTINGENCY',s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},alignment:{horizontal:'left',vertical:'center'}}},
-    {v:'',s:{fill:{fgColor:{rgb:ORANGC}}}},{v:'',s:{fill:{fgColor:{rgb:ORANGC}}}},
-    {v:sumGrand*1.1,t:'n',s:{font:{bold:true,sz:14,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
-  ]);
+  const sg=sM+sL;
+  for(let c=0;c<4;c++) sc2(R2,c,'',sf(WHITE)); R2++;
 
-  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
-  ws2['!cols'] = [{wch:40},{wch:16},{wch:16},{wch:16}];
-  ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
+  sc2(R2,0,'TOTAL REHAB',sfm(NAVY,WHITE,12,true,'left'));
+  sc2(R2,1,sM,  {numFmt:MONYR,...sfm(GBGC,DGN,11,true,'right')},'n');
+  sc2(R2,2,sL,  {numFmt:MONYR,...sfm(LBGC,DBL,11,true,'right')},'n');
+  sc2(R2,3,sg,  {numFmt:MONYR,...sfm(NAVY,WHITE,13,true,'right')},'n');
+  R2++;
+
+  sc2(R2,0,'+ 10% Contingency',sf(YELLC,'7A5800',10,false,'left',undefined,true));
+  sc2(R2,1,'',sf(YELLC)); sc2(R2,2,'',sf(YELLC));
+  sc2(R2,3,sg*.1,{numFmt:MONYR,...sf(YELLC,'7A5800',11,true,'right')},'n');
+  R2++;
+
+  sc2(R2,0,'TOTAL WITH CONTINGENCY',sfm(ORANGE,WHITE,13,true,'left'));
+  sc2(R2,1,'',sf(ORANGE)); sc2(R2,2,'',sf(ORANGE));
+  sc2(R2,3,sg*1.1,{numFmt:MONYR,...sfm(ORANGE,WHITE,14,true,'right')},'n');
+  R2++;
+
+  ws2['!ref'] = XLSX.utils.encode_range({s:{r:0,c:0},e:{r:R2-1,c:3}});
+  ws2['!cols'] = [{wch:42},{wch:16},{wch:16},{wch:16}];
+  ws2['!merges'] = m2;
+
+  // ── Write workbook ────────────────────────────────────────────────────────
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, 'Rehab Budget Detail');
   XLSX.utils.book_append_sheet(wb, ws2, 'Trade Summary');
-
-  // Write
   const date = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `rehab_budget_${activeState}_${date}.xlsx`);
 }
