@@ -191,7 +191,7 @@ input[type=number]{-moz-appearance:textfield}
 <div class="app">
 
 <div class="topbar">
-  <div class="tb-left"><h1>Rehab Budget</h1><p>Hawaii RE Investments</p></div>
+  <div class="tb-left"><h1>Rehab Budget</h1><p>Trusted Home Solutions LLC</p></div>
   <div class="tb-right"><span class="amt" id="tt">$0</span><span class="lbl">Total Rehab</span></div>
 </div>
 
@@ -309,6 +309,7 @@ function getFiltered() {
     const s = IS[item[0]];
     if (filterMode === 'qty' && s.qty === 0) return false;
     if (filterMode === 'mod' && !isModified(item[0])) return false;
+    if (filterMode.startsWith('t:') && item[2] !== filterMode.slice(2)) return false;
     if (searchQ) {
       const q = searchQ.toLowerCase();
       return item[4].toLowerCase().includes(q) ||
