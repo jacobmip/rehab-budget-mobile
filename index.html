@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rehab Budget">
+<title>Rehab Budget Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy:   #1a3a5c;
+  --blue:   #2563a8;
+  --orange: #c55a11;
+  --yellow: #fffbe6;
+  --green:  #1b5e20;
+  --gbg:    #e8f5e9;
+  --lb:     #eef5fb;
+  --bg:     #f0f4fa;
+  --card:   #ffffff;
+  --border: #d8e2ef;
+  --text:   #0e1d30;
+  --muted:  #6b7d92;
+  --mono:   'DM Mono', monospace;
+  --sans:   'Outfit', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:var(--sans);background:var(--bg);color:var(--text);overflow:hidden;-webkit-text-size-adjust:100%}
+.app{display:flex;flex-direction:column;height:100dvh;overflow:hidden}
+
+/* TOP BAR */
+.topbar{background:var(--navy);padding:12px 16px 10px;padding-top:calc(12px + env(safe-area-inset-top,0px));flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.tb-left h1{font-size:16px;font-weight:800;color:#fff;letter-spacing:-.3px;line-height:1}
+.tb-left p{font-size:10px;color:rgba(255,255,255,.4);font-family:var(--mono);margin-top:2px}
+.tb-right{text-align:right}
+.tb-right .amt{font-family:var(--mono);font-size:19px;font-weight:500;color:#fff;display:block;line-height:1}
+.tb-right .lbl{font-size:9px;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.5px}
+
+/* SEARCH */
+.searchbar{background:var(--navy);padding:0 14px 12px;display:flex;gap:8px;flex-shrink:0}
+.sw{position:relative;flex:1}
+.sw-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;color:rgba(255,255,255,.35);pointer-events:none}
+.sw input{width:100%;height:40px;background:rgba(255,255,255,.11);border:1.5px solid rgba(255,255,255,.14);border-radius:10px;color:#fff;font-family:var(--sans);font-size:15px;padding:0 10px 0 34px;outline:none;-webkit-appearance:none}
+.sw input::placeholder{color:rgba(255,255,255,.3)}
+.sw input:focus{background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.35)}
+.sw-clear{display:none;background:rgba(255,255,255,.17);border:none;border-radius:10px;color:#fff;font-size:17px;width:40px;height:40px;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.sw-clear.vis{display:flex}
+
+/* CHIPS */
+.chips{background:var(--card);border-bottom:1px solid var(--border);padding:7px 14px;display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;height:29px;padding:0 12px;border:1.5px solid var(--border);border-radius:20px;font-size:11px;font-weight:600;background:var(--bg);color:var(--muted);cursor:pointer;white-space:nowrap;display:flex;align-items:center;-webkit-user-select:none;user-select:none;transition:all .12s}
+.chip.active{background:var(--navy);border-color:var(--navy);color:#fff}
+
+/* STATS */
+.stats{background:var(--lb);border-bottom:1px solid var(--border);padding:6px 14px;display:flex;flex-shrink:0}
+.stat{flex:1;text-align:center}
+.stat+.stat{border-left:1px solid var(--border)}
+.stat .sv{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--navy);display:block;line-height:1}
+.stat .sl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px;display:block}
+
+/* LIST */
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.ri{padding:7px 16px 3px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.ri span{color:var(--blue);font-weight:500}
+
+/* TRADE GROUP */
+.tg-hdr{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;padding:8px 15px;display:flex;align-items:center;gap:8px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.tg-hdr .th-ch{font-size:10px;opacity:.55;transition:transform .2s;flex-shrink:0}
+.tg-hdr.col .th-ch{transform:rotate(-90deg)}
+.tg-hdr .th-nm{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.45px;flex:1}
+.tg-hdr .th-tt{font-family:var(--mono);font-size:11px;color:#7dd3fc}
+.st-hdr{padding:5px 15px;background:#eaeff7;font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px;border-left:3px solid var(--blue)}
+
+/* ITEM CARD */
+.card{background:var(--card);border-bottom:1px solid var(--border);padding:11px 15px;display:flex;flex-direction:column;gap:8px;transition:background .1s}
+.card.hq{background:#f0faf0;border-left:3px solid #2e7d32}
+.card.excl{opacity:.38}
+
+.c-top{display:flex;align-items:flex-start;gap:10px}
+.c-chk{width:22px;height:22px;border:2px solid var(--border);border-radius:6px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg);transition:all .12s}
+.c-chk.on{background:var(--blue);border-color:var(--blue)}
+.c-chk.on::after{content:'✓';color:#fff;font-size:12px;font-weight:700}
+.c-info{flex:1;min-width:0}
+.c-desc{font-size:13px;font-weight:600;color:var(--text);line-height:1.35}
+.c-spec{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;line-height:1.3}
+.c-note{font-size:10px;color:var(--orange);font-style:italic;margin-top:2px}
+.c-edit-btn{width:28px;height:28px;border:1.5px solid var(--border);border-radius:7px;background:var(--bg);color:var(--muted);font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-top:0;transition:all .12s}
+.c-edit-btn:active{background:var(--blue);border-color:var(--blue);color:#fff}
+.c-edit-btn.active-edit{background:var(--orange);border-color:var(--orange);color:#fff}
+
+.c-bot{display:flex;align-items:center;gap:7px}
+.c-rates{flex:1;display:flex;flex-direction:column;gap:2px}
+.rate-row{display:flex;gap:5px;align-items:center}
+.rb{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;font-weight:500;cursor:pointer;transition:all .1s}
+.rb.m{background:#e8f5e9;color:#1b5e20}
+.rb.l{background:#e3f2fd;color:#0d47a1}
+.rb.m.editing{background:#1b5e20;color:#fff;box-shadow:0 0 0 2px #1b5e20}
+.rb.l.editing{background:#0d47a1;color:#fff;box-shadow:0 0 0 2px #0d47a1}
+.rb.modified{position:relative}
+.rb.modified::after{content:'✎';position:absolute;top:-4px;right:-4px;font-size:8px;background:var(--orange);color:#fff;border-radius:50%;width:12px;height:12px;display:flex;align-items:center;justify-content:center;line-height:12px}
+.rate-unit{font-family:var(--mono);font-size:9px;color:var(--muted)}
+
+/* PRICE EDITOR */
+.price-editor{background:#f8faff;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;display:none;flex-direction:column;gap:6px;margin-top:2px}
+.price-editor.open{display:flex}
+.pe-row{display:flex;align-items:center;gap:8px}
+.pe-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;min-width:52px;flex-shrink:0}
+.pe-input{flex:1;height:32px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--mono);font-size:13px;font-weight:500;padding:0 8px;outline:none;background:#fff;color:var(--navy);transition:border-color .15s}
+.pe-input:focus{border-color:var(--blue)}
+.pe-input.mat-inp:focus{border-color:#2e7d32}
+.pe-input.lab-inp:focus{border-color:#0d47a1}
+.pe-unit{font-family:var(--mono);font-size:10px;color:var(--muted);flex-shrink:0}
+.pe-reset{height:32px;padding:0 10px;border:1.5px solid var(--border);border-radius:7px;font-size:11px;font-weight:600;color:var(--muted);background:var(--bg);cursor:pointer;flex-shrink:0;white-space:nowrap}
+.pe-reset:active{background:var(--orange);border-color:var(--orange);color:#fff}
+
+/* QTY */
+.c-qty{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.qb{width:34px;height:34px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-size:19px;font-weight:300;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-user-select:none;user-select:none;flex-shrink:0;transition:all .1s;line-height:1}
+.qb:active{background:var(--blue);border-color:var(--blue);color:#fff;transform:scale(.9)}
+.qi{width:52px;height:34px;border:1.5px solid var(--border);border-radius:8px;text-align:center;font-family:var(--mono);font-size:15px;font-weight:500;color:var(--navy);background:#fff;outline:none;-webkit-appearance:none;appearance:none;transition:border-color .15s}
+.qi:focus{border-color:var(--blue)}
+.qi.hv{background:var(--yellow);border-color:#c8a000;color:#7a5800}
+.c-lt{font-family:var(--mono);font-size:12px;font-weight:500;text-align:right;min-width:68px;flex-shrink:0}
+.c-lt.hv{color:var(--green);font-weight:700}
+.c-lt.z{color:#ccc}
+
+/* BOTTOM NAV */
+.bnav{background:var(--card);border-top:1px solid var(--border);padding:8px 14px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;gap:7px;flex-shrink:0}
+.nb{flex:1;height:44px;border:none;border-radius:10px;font-family:var(--sans);font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;-webkit-user-select:none;user-select:none;transition:all .12s}
+.nb:active{transform:scale(.95);opacity:.82}
+.nb.sec{background:var(--bg);color:var(--navy);border:1.5px solid var(--border)}
+.nb.pri{background:var(--orange);color:#fff}
+.nb.warn{background:#1b5e20;color:#fff}
+
+/* BOTTOM SHEETS */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.52);z-index:200;opacity:0;pointer-events:none;transition:opacity .25s}
+.ov.open{opacity:1;pointer-events:auto}
+.bs{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:18px 18px 0 0;z-index:201;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:88dvh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bs.open{transform:translateY(0)}
+.bs-handle{width:34px;height:4px;background:var(--border);border-radius:2px;margin:11px auto 0;flex-shrink:0}
+.bs-title{padding:12px 18px 8px;font-size:16px;font-weight:800;color:var(--navy);flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+.bs-close{width:30px;height:30px;border-radius:50%;background:var(--bg);border:none;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.bs-body{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;padding:0 14px 14px}
+
+/* STATE GRID */
+.sg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:4px 0 14px}
+.sc{border:2px solid var(--border);border-radius:12px;padding:11px;cursor:pointer;text-align:center;background:var(--bg);transition:all .14s}
+.sc.active{border-color:var(--blue);background:var(--blue);color:#fff}
+.sc .scc{font-family:var(--mono);font-size:17px;font-weight:500;display:block;line-height:1}
+.sc .scn{font-size:9px;opacity:.65;margin-top:2px;display:block}
+.sc .scm{font-family:var(--mono);font-size:8px;margin-top:5px;opacity:.55;display:block}
+.sc.active .scm{opacity:.82}
+
+/* SUMMARY SHEET */
+.sum-trade{margin-bottom:5px;border-radius:9px;overflow:hidden;border:1px solid var(--border)}
+.sum-thdr{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--lb);font-size:10px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.3px}
+.sum-thdr .ta{font-family:var(--mono);font-size:12px;font-weight:500}
+.sum-dl{display:flex;justify-content:space-between;padding:4px 12px;font-size:10px;color:var(--muted);border-top:1px solid #f0f2f5}
+.sum-dl .da{font-family:var(--mono);font-weight:500;color:var(--text)}
+.sum-tots{margin-top:12px;background:var(--lb);border-radius:12px;padding:13px 15px;border:1px solid var(--border)}
+.str{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.str .tl{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.str .ta{font-family:var(--mono);font-size:13px;color:var(--text)}
+.sgr{display:flex;justify-content:space-between;align-items:center;margin-top:9px;padding-top:9px;border-top:2px solid var(--navy)}
+.sgr .gl{font-size:14px;font-weight:800;color:var(--navy)}
+.sgr .ga{font-family:var(--mono);font-size:21px;font-weight:500;color:var(--navy)}
+.sco{display:flex;justify-content:space-between;margin-top:3px;opacity:.55}
+.sco .cl{font-size:10px;color:var(--muted)}
+.sco .ca{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+/* RESET BANNER */
+.reset-banner{background:#fff3e0;border:1.5px solid #ffb74d;border-radius:8px;padding:8px 12px;margin-bottom:8px;display:none;align-items:center;gap:8px;font-size:11px;color:#7a4100}
+.reset-banner.vis{display:flex}
+.reset-banner button{margin-left:auto;padding:4px 10px;background:#ff6d00;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0}
+
+mark{background:#fff176;color:inherit;border-radius:2px;padding:0 1px}
+.empty{text-align:center;padding:50px 24px;color:var(--muted)}
+.empty .ei{font-size:36px;margin-bottom:10px;opacity:.3}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+input[type=number]{-moz-appearance:textfield}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:#c5cdd8;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar">
+  <div class="tb-left"><h1>Rehab Budget</h1><p>Hawaii RE Investments</p></div>
+  <div class="tb-right"><span class="amt" id="tt">$0</span><span class="lbl">Total Rehab</span></div>
+</div>
+
+<div class="searchbar">
+  <div class="sw">
+    <span class="sw-icon">🔍</span>
+    <input id="srch" type="search" placeholder="Search 418 items..." autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>
+  <button class="sw-clear" id="sw-clear" onclick="clrSrch()">✕</button>
+</div>
+
+<div class="chips" id="chips">
+  <div class="chip active" onclick="setF('all',this)">All</div>
+  <div class="chip" onclick="setF('qty',this)">✓ With Qty</div>
+  <div class="chip" onclick="setF('mod',this)">✎ Modified</div>
+</div>
+
+<div class="stats">
+  <div class="stat"><span class="sv" id="s0">0</span><span class="sl">Active</span></div>
+  <div class="stat"><span class="sv" id="s1">$0</span><span class="sl">Materials</span></div>
+  <div class="stat"><span class="sv" id="s2">$0</span><span class="sl">Labor</span></div>
+  <div class="stat"><span class="sv" id="s3">HI</span><span class="sl">Market</span></div>
+</div>
+
+<div class="scroll" id="scroll">
+  <div class="ri" id="ri"></div>
+  <div id="list"></div>
+</div>
+
+<div class="bnav">
+  <button class="nb sec" onclick="openBS('bs-state')">🌏 State</button>
+  <button class="nb sec" onclick="openBS('bs-sum')">📊 Summary</button>
+  <button class="nb pri" onclick="exportXLSX()">⬇ Export</button>
+</div>
+</div>
+
+<!-- STATE SHEET -->
+<div class="ov" id="ov-bs-state" onclick="closeBS('bs-state')"></div>
+<div class="bs" id="bs-state">
+  <div class="bs-handle"></div>
+  <div class="bs-title">Select Market<button class="bs-close" onclick="closeBS('bs-state')">✕</button></div>
+  <div class="bs-body"><div class="sg" id="state-grid"></div></div>
+</div>
+
+<!-- SUMMARY SHEET -->
+<div class="ov" id="ov-bs-sum" onclick="closeBS('bs-sum')"></div>
+<div class="bs" id="bs-sum">
+  <div class="bs-handle"></div>
+  <div class="bs-title">Cost Summary<button class="bs-close" onclick="closeBS('bs-sum')">✕</button></div>
+  <div class="bs-body" id="sum-body"></div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────────────────
+// [row, num, trade, subtrade, desc, spec, unit, baseMat, baseLab, include, notes]
+const BASE = [[9,1,"1.  DEMOLITION & DISPOSAL","Interior Demo","Demo & remove all drywall (walls & ceilings)","Full gut \u2014 SF of surface area","SF",0.0,0.65,1,"Whole house gut"],[10,2,"1.  DEMOLITION & DISPOSAL","Interior Demo","Demo & remove plaster walls / lathe","Pre-1960 homes; test for asbestos first","SF",0.0,1.1,1,"If applicable"],[11,3,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove carpet & pad","All rooms \u2014 per SF of floor","SF",0.0,0.3,1,""],[12,4,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove ceramic / tile floor","With thinset; thick bed = more labor","SF",0.0,1.0,1,""],[13,5,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove vinyl / linoleum sheet goods","May contain asbestos if pre-1980","SF",0.0,0.35,1,""],[14,6,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove hardwood flooring","Only if replacing, not refinishing","SF",0.0,0.5,1,""],[15,7,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove kitchen cabinets \u2014 full set","Uppers, lowers, island","EA",0.0,175.0,1,"Save if donating"],[16,8,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove kitchen countertops","Laminate, tile, or stone slab","LF",0.0,20.0,1,""],[17,9,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove kitchen appliances \u2014 full set","Fridge, range, DW, microwave OTR","LS",0.0,150.0,1,"Sell/donate if working"],[18,10,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove bathroom vanity (ea.)","Cabinet + top, disconnect drain/supply","EA",0.0,75.0,1,""],[19,11,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove toilet (ea.)","Cap flange after removal","EA",0.0,55.0,1,""],[20,12,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove bathtub / shower unit (ea.)","Fiberglass or tile surround","EA",0.0,185.0,1,"Cast iron tubs = extra labor"],[21,13,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove interior doors & frames (ea.)","Prehung units","EA",0.0,40.0,1,""],[22,14,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove interior trim & baseboard","Per LF; reuse if in good shape","LF",0.0,0.4,1,""],[23,15,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove suspended / drop ceiling","Grid & tiles, per SF","SF",0.0,0.45,1,""],[24,16,"1.  DEMOLITION & DISPOSAL","Interior Demo","Remove light fixtures (ea.)","Cap wires, remove box","EA",0.0,25.0,1,""],[26,17,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Tear-off roofing \u2014 1 layer","Per SQ (100 SF); inspect deck after","SQ",0.0,65.0,1,""],[27,18,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Tear-off roofing \u2014 additional layers","Per SQ per extra layer","SQ",0.0,30.0,1,"Add if 2+ layer roof"],[28,19,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Remove gutters & downspouts","Aluminum K-style, per LF","LF",0.0,1.5,1,""],[29,20,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Remove exterior doors (ea.)","Full prehung unit","EA",0.0,65.0,1,""],[30,21,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Remove windows (ea.)","Full unit incl. frame & brickmold","EA",0.0,85.0,1,""],[31,22,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Remove vinyl / fiber-cement siding","Per SF of wall surface","SF",0.0,0.65,1,""],[32,23,"1.  DEMOLITION & DISPOSAL","Exterior Demo","Remove deck \u2014 full structure","Boards + framing + footings","SF",0.0,3.5,1,""],[34,24,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Dumpster rental \u2014 10-yard (1 wk)","~3-ton cap; small jobs/single room","WK",385.0,0.0,1,"Confirm permit if street"],[35,25,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Dumpster rental \u2014 20-yard (1 wk)","~6-ton cap; standard full flip","WK",465.0,0.0,1,"Most common for full guts"],[36,26,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Dumpster rental \u2014 30-yard (1 wk)","~9-ton cap; large house/major demo","WK",565.0,0.0,1,""],[37,27,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Dumpster \u2014 extra day fee","Beyond standard 7-day rental","DAY",38.0,0.0,1,""],[38,28,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Dumpster \u2014 extra tonnage (per ton)","Over contracted weight","TON",80.0,0.0,1,""],[39,29,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Roofing debris dumpster (separate)","Shingle-only, 10-yd","EA",295.0,0.0,1,"Roofing co. often provides"],[40,30,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Junk removal / haul truck","Load & go, same-day; light cleanouts","LOAD",365.0,0.0,1,""],[41,31,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Porta-potty rental (per month)","Standard unit; required for crews","MO",155.0,0.0,1,""],[42,32,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Asbestos bulk sample test (per sample)","Lab analysis; test pre-1980 homes","EA",55.0,0.0,1,"Required before any demo"],[43,33,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Lead paint test (per room/component)","XRF or swab test","EA",38.0,0.0,1,""],[44,34,"1.  DEMOLITION & DISPOSAL","Haul-Off & Disposal","Asbestos abatement \u2014 per SF","Licensed contractor; varies widely","SF",0.0,0,1,"Get specialty bid"],[49,35,"2.  ROUGH PLUMBING","Water Heater","Water heater \u2014 40-gal natural gas","Bradford White M240S6DS or equal","EA",579.0,285.0,1,"Most common flip choice"],[50,36,"2.  ROUGH PLUMBING","Water Heater","Water heater \u2014 50-gal natural gas","Bradford White M250S6DS","EA",679.0,285.0,1,"For larger homes 3+ baths"],[51,37,"2.  ROUGH PLUMBING","Water Heater","Water heater \u2014 40-gal electric","Bradford White M240H6DS","EA",419.0,285.0,1,"If no gas service"],[52,38,"2.  ROUGH PLUMBING","Water Heater","Water heater \u2014 tankless gas","Rinnai RU199iN or Navien NPE-240A","EA",1150.0,450.0,1,"Add gas line upgrade cost"],[53,39,"2.  ROUGH PLUMBING","Water Heater","Water heater pan + drain line","Galv. pan + 3/4\" CPVC to floor drain","EA",48.0,55.0,1,"Code required in most areas"],[54,40,"2.  ROUGH PLUMBING","Water Heater","Expansion tank \u2014 2-gal","Amtrol WX-202 or equal","EA",58.0,75.0,1,"Required w/ PRV or closed system"],[55,41,"2.  ROUGH PLUMBING","Water Heater","Pressure reducing valve (PRV)","Watts 25AUB-Z3 lead-free brass","EA",88.0,95.0,1,"Set to 60-80 psi"],[56,42,"2.  ROUGH PLUMBING","Water Heater","Main water shutoff \u2014 ball valve","1\" full-port, lead-free","EA",58.0,95.0,1,"Replace if gate valve"],[57,43,"2.  ROUGH PLUMBING","Water Heater","Hose bib \u2014 frost-free exterior","Woodford 65C 8\" anti-siphon","EA",42.0,78.0,1,"1 front + 1 back"],[59,44,"2.  ROUGH PLUMBING","Supply Rough-In","PEX-A supply pipe \u2014 1/2\"","Uponor AquaPEX; per LF","LF",0.68,0.0,1,""],[60,45,"2.  ROUGH PLUMBING","Supply Rough-In","PEX-A supply pipe \u2014 3/4\"","Main distribution lines; per LF","LF",0.95,0.0,1,""],[61,46,"2.  ROUGH PLUMBING","Supply Rough-In","Copper supply \u2014 1/2\" Type L","Alternative; per LF","LF",2.25,0.0,1,""],[62,47,"2.  ROUGH PLUMBING","Supply Rough-In","Supply rough-in labor (whole house)","Run all supply to all fixtures","HR",0.0,95.0,1,"~10-18 hrs typical 3/2"],[63,48,"2.  ROUGH PLUMBING","Supply Rough-In","Angle stops / supply valves (ea.)","1/4-turn BrassCraft or equal","EA",13.0,18.0,1,"Replace all old ones"],[64,49,"2.  ROUGH PLUMBING","Supply Rough-In","Braided stainless supply flex (ea.)","12\" or 20\" per connection","EA",8.0,0.0,1,""],[65,50,"2.  ROUGH PLUMBING","Supply Rough-In","Water hammer arrestors \u2014 washing machine","Sioux Chief 660-A","EA",19.0,25.0,1,""],[67,51,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","PVC drain pipe \u2014 1-1/2\"","Sink / lavatory drains; per LF","LF",1.85,0.0,1,""],[68,52,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","PVC drain pipe \u2014 2\"","Shower & tub drains; per LF","LF",2.25,0.0,1,""],[69,53,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","PVC drain pipe \u2014 3\"","Toilet branch lines; per LF","LF",3.55,0.0,1,""],[70,54,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","PVC drain pipe \u2014 4\"","Main drain & sewer connection; per LF","LF",4.85,0.0,1,""],[71,55,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","DWV fittings (elbows, tees, wye \u2014 lot)","Assorted per rough-in bid","LS",0,0,1,"Include in plumber bid"],[72,56,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","DWV rough-in labor (whole house)","All drain/vent to all fixtures","HR",0.0,95.0,1,"~12-20 hrs typical 3/2"],[73,57,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","Vent-through-roof flashing kit","EPDM boot + collar; per penetration","EA",28.0,55.0,1,"1 per vent stack"],[74,58,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","Air admittance valve (AAV)","Studor 1.5\" or 2\"; per location","EA",24.0,38.0,1,"Avoids roof penetrations"],[75,59,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","Floor-level cleanout \u2014 4\"","Required at base of stack","EA",36.0,95.0,1,""],[76,60,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","Sewer scope / camera inspection","Video main line; do before closing","EA",225.0,0.0,1,"Non-negotiable before purchase"],[77,61,"2.  ROUGH PLUMBING","Drain, Waste & Vent (DWV)","Sewer line spot repair \u2014 per LF","Excavate & patch; varies widely","LF",0.0,0,1,"Get specialty plumber bid"],[82,62,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Kitchen faucet \u2014 single-handle pull-down","Moen Arbor 7594ESRS or Delta 9159-AR","EA",145.0,85.0,1,"Chrome or Arctic Stainless"],[83,63,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Kitchen sink \u2014 undermount single basin","Kraus KHU100-32 16-ga stainless","EA",178.0,145.0,1,""],[84,64,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Kitchen sink \u2014 undermount double basin","Kraus KHU102-33 16-ga stainless","EA",225.0,145.0,1,""],[85,65,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Garbage disposal \u2014 1/2 HP","InSinkErator Badger 500","EA",118.0,85.0,1,"Standard flip choice"],[86,66,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Garbage disposal \u2014 3/4 HP","InSinkErator Evolution Compact","EA",188.0,85.0,1,"Upgrade option"],[87,67,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Dishwasher water supply + drain hookup","DW supply valve + drain loop","EA",36.0,65.0,1,""],[88,68,"3.  PLUMBING FIXTURES & TRIM","Kitchen Plumbing","Refrigerator ice maker line","1/4\" saddle valve or compression","EA",19.0,55.0,1,""],[90,69,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Bathroom faucet \u2014 single-hole (ea.)","Moen Adler 6410 or Delta Foundations","EA",85.0,65.0,1,"Per bathroom"],[91,70,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Bathroom faucet \u2014 widespread 8\" (ea.)","Moen Brantford 6610 series","EA",148.0,75.0,1,"Master bath upgrade"],[92,71,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Bathroom sink \u2014 drop-in ceramic (ea.)","Kohler K-2210 Caxton 20\"\u00d717\"","EA",95.0,95.0,1,"Standard flip choice"],[93,72,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Bathroom sink \u2014 undermount (ea.)","Kohler K-2355 Caxton","EA",128.0,115.0,1,""],[94,73,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Toilet \u2014 elongated 1.28 GPF (ea.)","Kohler Highline K-3978 or equal","EA",265.0,145.0,1,"Standard flip \u2014 ADA comfort ht."],[95,74,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Toilet \u2014 dual-flush comfort height (ea.)","American Standard H2Option 2886","EA",295.0,145.0,1,"Sell point"],[96,75,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Shower valve \u2014 pressure-balance (ea.)","Moen Posi-Temp 8372 or Delta Monitor","EA",168.0,175.0,1,"Code required anti-scald"],[97,76,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Shower head \u2014 standard 1.75 GPM (ea.)","Moen Engage 26100, chrome","EA",48.0,35.0,1,""],[98,77,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Shower head \u2014 rain head (ea.)","Moen Attract 26009 8\" ceil. mount","EA",148.0,55.0,1,"Master bath upgrade"],[99,78,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Tub \u2014 alcove 5' standard (ea.)","Sterling Advantage 71121100 steel","EA",298.0,250.0,1,"Cast iron = ~$100 more mat."],[100,79,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Tub faucet \u2014 2-handle deck mount (ea.)","Moen Chateau or Delta Foundations","EA",145.0,145.0,1,""],[101,80,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Tub drain & overflow kit (ea.)","Watco or Dearborn chrome trip lever","EA",48.0,65.0,1,""],[102,81,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Shower pan \u2014 acrylic (ea.)","Sterling Ensemble 72161100-0 36\u00d736","EA",185.0,185.0,1,"Alt: 48\" or 60\""],[103,82,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Toilet flange replacement (ea.)","PVC closet flange w/ extension ring","EA",19.0,58.0,1,"Replace cast iron flanges"],[104,83,"3.  PLUMBING FIXTURES & TRIM","Bathroom Plumbing \u2014 Per Bathroom","Wax ring + closet bolts (ea.)","Korky Max Wax 6000BP","EA",12.0,25.0,1,""],[106,84,"3.  PLUMBING FIXTURES & TRIM","Laundry & Utility Plumbing","Washing machine recessed valve box","Sioux Chief 696-2BXLF w/ valves","EA",58.0,75.0,1,""],[107,85,"3.  PLUMBING FIXTURES & TRIM","Laundry & Utility Plumbing","Washing machine drain standpipe","2\" PVC standpipe + trap + mount","EA",28.0,65.0,1,""],[108,86,"3.  PLUMBING FIXTURES & TRIM","Laundry & Utility Plumbing","Utility sink \u2014 laundry tub","Mustee 12 2-basin poly, 24\"\u00d720\"","EA",138.0,125.0,1,""],[109,87,"3.  PLUMBING FIXTURES & TRIM","Laundry & Utility Plumbing","Sump pump \u2014 1/3 HP","Zoeller M53 Mighty-Mate w/ check valve","EA",188.0,145.0,1,"If basement present"],[114,88,"4.  HVAC \u2014 EQUIPMENT","Heating Equipment","Gas furnace \u2014 80% AFUE 60k BTU","Carrier 59SC5 or Lennox ML180","EA",935.0,650.0,1,"1,000\u20131,500 SF homes"],[115,89,"4.  HVAC \u2014 EQUIPMENT","Heating Equipment","Gas furnace \u2014 80% AFUE 80k BTU","Carrier 59SC5B080S21 or Lennox ML180","EA",1058.0,650.0,1,"1,500\u20132,200 SF homes"],[116,90,"4.  HVAC \u2014 EQUIPMENT","Heating Equipment","Gas furnace \u2014 96% AFUE 80k BTU","Carrier 59MN7 or Lennox EL296V","EA",1458.0,700.0,1,"High-eff; cold climate"],[117,91,"4.  HVAC \u2014 EQUIPMENT","Heating Equipment","Gas furnace \u2014 96% AFUE 100k BTU","Lennox EL296V100XE36C or equal","EA",1658.0,700.0,1,"Larger homes > 2,200 SF"],[119,92,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","A/C condenser \u2014 2-ton 14.3 SEER2","Carrier 24ACC636A003 or Lennox XC14","EA",1088.0,650.0,1,"< 1,000 SF"],[120,93,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","A/C condenser \u2014 3-ton 14.3 SEER2","Carrier 24ACC636A003 or Lennox XC14","EA",1195.0,650.0,1,"1,000\u20131,800 SF"],[121,94,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","A/C condenser \u2014 4-ton 14.3 SEER2","Carrier 24ACC648A003 or Lennox XC14","EA",1385.0,700.0,1,"1,800\u20132,800 SF"],[122,95,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","A/C condenser \u2014 5-ton 14.3 SEER2","For larger homes","EA",1595.0,750.0,1,"2,800+ SF"],[123,96,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","Evaporator coil \u2014 A-coil 3-ton","Carrier CNPVP3617ALA or equal","EA",498.0,0.0,1,"Match to condenser; install w/ furnace"],[124,97,"4.  HVAC \u2014 EQUIPMENT","Cooling Equipment","Evaporator coil \u2014 A-coil 4-ton","Carrier CNPVP4821ALA or equal","EA",558.0,0.0,1,""],[126,98,"4.  HVAC \u2014 EQUIPMENT","Heat Pump (Alternative to Gas)","Heat pump \u2014 3-ton 15 SEER2","Carrier 25HCB336A003 or Lennox XP15","EA",2188.0,850.0,1,"All-in-one heat/cool; no gas"],[127,99,"4.  HVAC \u2014 EQUIPMENT","Heat Pump (Alternative to Gas)","Heat pump \u2014 4-ton 15 SEER2","Carrier 25HCB448A or Lennox XP15","EA",2488.0,900.0,1,""],[128,100,"4.  HVAC \u2014 EQUIPMENT","Heat Pump (Alternative to Gas)","Air handler \u2014 for heat pump","Carrier FV4CNB003 or Lennox CBH35-41","EA",788.0,0.0,1,"Replaces furnace"],[130,101,"4.  HVAC \u2014 EQUIPMENT","Mini-Split (Ductless Zones)","Mini-split \u2014 9k BTU single zone","Mitsubishi MSZ-GL09NA or Daikin","EA",858.0,455.0,1,"Add-on room / bonus room"],[131,102,"4.  HVAC \u2014 EQUIPMENT","Mini-Split (Ductless Zones)","Mini-split \u2014 12k BTU single zone","Mitsubishi MSZ-GL12NA or Daikin","EA",998.0,455.0,1,""],[132,103,"4.  HVAC \u2014 EQUIPMENT","Mini-Split (Ductless Zones)","Mini-split \u2014 2-zone 18k BTU","Daikin 2MXS18NMVJU + 2 heads","EA",1658.0,855.0,1,""],[134,104,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Condensing unit disconnect (60A)","Cutler-Hammer DPU222RB or equal","EA",68.0,65.0,1,"Code req'd at A/C condenser"],[135,105,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Condenser equipment pad","Diversitech E-Lite composite","EA",48.0,35.0,1,""],[136,106,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Refrigerant lineset \u2014 25 ft set","3/8\" + 7/8\" copper, pre-insulated","SET",155.0,0.0,1,"Size per equipment specs"],[137,107,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Refrigerant charge & startup","R-410A / R-32 charge, leak test, startup","EA",0.0,188.0,1,"Per HVAC tech"],[138,108,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Gas line \u2014 CSST flex (per LF)","Ward Mfg TracPipe or OmegaFlex","LF",3.65,0.0,1,"Req's licensed gas fitter"],[139,109,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Gas shutoff ball valve \u2014 3/4\"","BrassCraft CSSC23-12; per valve","EA",24.0,48.0,1,"At each gas appliance"],[140,110,"4.  HVAC \u2014 EQUIPMENT","Equipment Accessories","Gas system pressure test","Required after any gas work","EA",0.0,128.0,1,""],[145,111,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Flex duct \u2014 6\" R-6 insulated","Per LF supply branch runs","LF",1.88,0.0,1,""],[146,112,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Flex duct \u2014 8\" R-6 insulated","Larger supply runs; per LF","LF",2.28,0.0,1,""],[147,113,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Sheet metal trunk \u2014 supply","Main supply plenum & trunk duct","LF",0,0,1,"Price per HVAC contractor bid"],[148,114,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Sheet metal return trunk","Main return air duct","LF",0,0,1,""],[149,115,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Supply register \u2014 4\"\u00d710\" steel","White painted steel floor/wall","EA",11.0,0.0,1,""],[150,116,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Supply register \u2014 6\"\u00d710\" steel","White painted steel floor/wall","EA",14.0,0.0,1,""],[151,117,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Return air grille \u2014 14\"\u00d724\" steel","White steel, 1\" filter slot","EA",29.0,0.0,1,""],[152,118,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Return air grille \u2014 20\"\u00d725\" steel","White steel, 1\" filter slot","EA",38.0,0.0,1,""],[153,119,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Duct mastic sealant (bucket)","Hardcast 601 or Ductmate; brush on all joints","GL",55.0,0.0,1,"Apply before insulating"],[154,120,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Duct sealing + insulation labor","Mastic all joints; wrap R-8 all supply","LS",0.0,0,1,"Include in HVAC bid"],[155,121,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Ductwork","Full ductwork install \u2014 labor","All supply + return labor, typical 3/2","LS",0.0,0,1,"Get separate HVAC bid"],[157,122,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Smart thermostat \u2014 Ecobee SmartThermostat","Ecobee EB-STATE6-01; WiFi, w/ sensor","EA",218.0,65.0,1,"Strong sell point for buyers"],[158,123,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Smart thermostat \u2014 Nest Learning (4th gen)","Google G4CVZ or T3021US","EA",198.0,65.0,1,""],[159,124,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Programmable thermostat \u2014 standard","Honeywell RTH7560E 7-day","EA",48.0,45.0,1,"Budget option"],[160,125,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Thermostat wire \u2014 18/5 (per LF)","Southwire or comparable","LF",0.27,0.0,1,""],[161,126,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Condensate drain line \u2014 3/4\" PVC","To floor drain or exterior","LF",0.88,0.0,1,""],[162,127,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Condensate pump","Little Giant VCMA-20UL; below-grade","EA",68.0,48.0,1,"If drain is above coil"],[163,128,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Filter \u2014 16\"\u00d725\"\u00d74\" MERV-11","Filtrete 1085 or Nordic Pure","EA",29.0,0.0,1,"Leave spare for buyer"],[164,129,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Filter \u2014 20\"\u00d725\"\u00d74\" MERV-11","Filtrete 1085 or Nordic Pure","EA",36.0,0.0,1,""],[165,130,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Bath exhaust fan \u2014 80 CFM (ea.)","Panasonic FV-08VQ5 WhisperCeiling","EA",58.0,85.0,1,"Energy Star < 1.0 sone"],[166,131,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Bath exhaust fan \u2014 combo light (ea.)","Broan 744 or Panasonic FV-11VHL2","EA",88.0,85.0,1,""],[167,132,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Bath fan duct \u2014 4\" flex to ext.","Insulated 4\" flex + vent cap","EA",16.0,48.0,1,"Never vent to attic"],[168,133,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Kitchen range hood \u2014 300 CFM ducted","Broan E6030SS 30\" under-cabinet","EA",188.0,148.0,1,"Standard flip choice"],[169,134,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Range hood 6\" round duct to ext.","Duct run + exterior cap","LF",2.28,0.0,1,""],[170,135,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Dryer vent \u2014 4\" rigid galvanized","Per LF; rigid only in wall","LF",3.55,0.0,1,"Code: max 25 ft equiv."],[171,136,"5.  HVAC \u2014 DUCTWORK & CONTROLS","Controls & Ventilation","Dryer vent cap \u2014 louvered exterior","Deflecto 4\" or Heartland","EA",19.0,36.0,1,""],[176,137,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Main panel upgrade \u2014 200A 40-space","Siemens P4240B1200 or Square D QO140L200PG","EA",498.0,858.0,1,"Most flips need this upgrade"],[177,138,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Sub-panel \u2014 60A 12-space","Siemens P1224B160 or Square D QO112L60PGC","EA",188.0,355.0,1,"Garage / detached struct."],[178,139,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Sub-panel \u2014 100A 20-space","Siemens P2020B1100 or Square D QO120L100PGC","EA",228.0,428.0,1,""],[179,140,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Grounding electrode system","2 ground rods + 6 AWG clamp + bonding","LS",88.0,168.0,1,""],[180,141,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","AFCI breaker \u2014 15A (ea.)","Siemens QA115AFC or Square D QO115PCAFI","EA",48.0,0.0,1,"Count per circuit \u2014 bedrooms req'd"],[181,142,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","AFCI breaker \u2014 20A (ea.)","Siemens QA120AFC or Square D QO120PCAFI","EA",52.0,0.0,1,"Kitchen, living, dining"],[182,143,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","GFCI breaker \u2014 20A (ea.)","Siemens QF220A or Square D QO220GFICP","EA",55.0,0.0,1,"Bath, garage, exterior, kitchen"],[183,144,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Standard breaker \u2014 20A (ea.)","Siemens Q120 or Square D QO120","EA",12.0,0.0,1,""],[184,145,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Service & Panel","Electrical permit + inspection fee","City permit; price varies","LS",0,0,1,"Required for panel work"],[186,146,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","14/2 NM-B cable (per LF)","Southwire SIMpull 14/2 w/ ground","LF",0.43,0.0,1,"15A circuits: lights, bedrooms"],[187,147,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","12/2 NM-B cable (per LF)","Southwire SIMpull 12/2 w/ ground","LF",0.59,0.0,1,"20A: kitchen, bath, laundry"],[188,148,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","12/3 NM-B cable (per LF)","3-conductor for 3-way or MWBC","LF",0.88,0.0,1,""],[189,149,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","10/2 NM-B cable (per LF)","30A circuits: dryer, A/C","LF",1.28,0.0,1,""],[190,150,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","10/3 NM-B cable (per LF)","Dryer w/ neutral (4-wire)","LF",1.58,0.0,1,""],[191,151,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","6/3 NM-B cable (per LF)","50A range / oven circuit","LF",3.25,0.0,1,""],[192,152,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","Rough-in labor \u2014 per circuit","Home run + branch wiring labor","CIR",0.0,95.0,1,"Typical 3/2: 25-35 circuits"],[193,153,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","Plastic electrical box \u2014 single gang","Per box (NM cable type)","EA",0.78,0.0,1,""],[194,154,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","Plastic electrical box \u2014 double gang","Per box","EA",1.28,0.0,1,""],[195,155,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","4\" octagon / round metal box","Ceiling fixtures, fans","EA",2.55,0.0,1,""],[196,156,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","Ceiling fan-rated brace box","Rated for fan weight + motion","EA",13.0,0.0,1,""],[197,157,"6.  ELECTRICAL \u2014 PANEL & ROUGH WIRING","Rough-In Wiring","1/2\" EMT conduit (per LF)","Exposed runs in garage/basement","LF",0.68,0.0,1,""],[202,158,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Duplex outlet \u2014 15A TR (ea.)","Leviton T5320-W or Hubbell HBL5320WA","EA",2.55,12.0,1,"Tamper-resistant req'd by code"],[203,159,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Duplex outlet \u2014 20A TR (ea.)","Leviton T5362-W; kitchen/bath","EA",4.55,12.0,1,"T-slot face"],[204,160,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","GFCI outlet \u2014 15A self-test (ea.)","Leviton GFNT1-W or Pass & Seymour","EA",19.0,18.0,1,"Bath, exterior"],[205,161,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","GFCI outlet \u2014 20A self-test (ea.)","Leviton GFNT2-W or Pass & Seymour","EA",23.0,18.0,1,"Kitchen countertop req'd"],[206,162,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Outlet \u2014 240V 30A dryer (ea.)","Leviton 5207-SS NEMA 14-30R","EA",19.0,36.0,1,""],[207,163,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Outlet \u2014 240V 50A range (ea.)","Leviton 5852-SS NEMA 14-50R","EA",29.0,36.0,1,""],[208,164,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","USB combo outlet A+C (ea.)","Leviton T5632-W or Legrand radiant","EA",28.0,15.0,1,"Sell point; kitchens/bedrooms"],[209,165,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Single-pole switch \u2014 15A (ea.)","Leviton S01-5501-2WS rocker","EA",3.55,12.0,1,""],[210,166,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","3-way switch (ea.)","Leviton S03-5503-2WS","EA",7.55,18.0,1,"Multi-location lighting"],[211,167,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Dimmer \u2014 LED compatible 600W (ea.)","Lutron Skylark CTCL-153P-WH","EA",22.0,18.0,1,"Living/dining/master"],[212,168,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Smart dimmer \u2014 Lutron Caseta (ea.)","Lutron P-PKG1W-WH Caseta + Pico","EA",58.0,20.0,1,"Strong sell point; buyers love"],[213,169,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Decora cover plate \u2014 1-gang (ea.)","Leviton 80401-W","EA",1.28,0.0,1,""],[214,170,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Decora cover plate \u2014 2-gang (ea.)","Leviton 80409-W","EA",2.28,0.0,1,""],[215,171,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Outlets & Switches","Weatherproof in-use cover (ea.)","Leviton 5977-GY for exterior","EA",5.55,0.0,1,""],[217,172,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Recessed light \u2014 4\" LED dimmable (ea.)","Halo H4ICAT or Lutron 4\" 650 lm 3000K","EA",22.0,36.0,1,""],[218,173,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Recessed light \u2014 6\" LED dimmable (ea.)","Halo H6ICAT or Lutron 6\" 900 lm 3000K","EA",26.0,36.0,1,""],[219,174,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Flush mount \u2014 standard (ea.)","Kichler 8109WH or Progress P350104","EA",36.0,46.0,1,"Bedrooms, hallways"],[220,175,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Flush mount \u2014 upgraded semi-flush (ea.)","Kichler 42196 or Progress P350084","EA",88.0,46.0,1,"Living areas"],[221,176,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Vanity light bar \u2014 3-light (ea.)","Kichler 45686 or Progress P2035","EA",78.0,46.0,1,"Per bathroom"],[222,177,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Vanity light bar \u2014 4-light (ea.)","Kichler 45690 or Progress P2036","EA",115.0,46.0,1,"Master bath"],[223,178,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Ceiling fan w/ light kit (ea.)","Hunter 53237 52\" or Harbor Breeze","EA",168.0,68.0,1,"Bedrooms, living room"],[224,179,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Kitchen under-cabinet LED (per LF)","Waveform Lighting FK-DR or similar","LF",14.0,26.0,1,""],[225,180,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Exterior wall sconce (ea.)","Progress P5678-09 or Kichler 9235BN","EA",68.0,56.0,1,"Front & rear"],[226,181,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Exterior flood/motion light (ea.)","Defiant 180-deg LED 2-head","EA",48.0,56.0,1,""],[227,182,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Smoke detector \u2014 hardwired combo (ea.)","Kidde i4618 combination smoke/CO","EA",39.0,48.0,1,"1 per bdrm + 1 per floor req'd"],[228,183,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Carbon monoxide detector (ea.)","Kidde KN-COSM-B; hardwired combo","EA",39.0,48.0,1,""],[229,184,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Video doorbell \u2014 Ring or Nest","Ring Pro 2 or Google Nest Doorbell","EA",198.0,78.0,1,"Big sell point for buyers"],[230,185,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","Whole-house surge protector","Siemens FS140 panel-mount 140kA","EA",88.0,68.0,1,"Buyers love; ~$150 value"],[231,186,"7.  ELECTRICAL \u2014 DEVICES, FIXTURES & FINISH","Lighting Fixtures","EV charging outlet \u2014 NEMA 14-50R","50A 240V circuit to garage","EA",36.0,95.0,1,"Increasingly expected by buyers"],[236,187,"8.  ROOFING","Roofing Materials","Arch. shingles \u2014 30-yr (per SQ)","GAF Timberline HDZ or CertainTeed Landmark","SQ",118.0,0.0,1,"1 SQ = 100 SF; add 10% waste"],[237,188,"8.  ROOFING","Roofing Materials","Arch. shingles \u2014 50-yr (per SQ)","GAF Timberline UHDZ or CertainTeed Landmark Pro","SQ",158.0,0.0,1,"Better resale value"],[238,189,"8.  ROOFING","Roofing Materials","Ice & water shield (per SQ)","Grace Ice & Water Shield or GAF WeatherWatch","SQ",88.0,0.0,1,"Min 3' eaves; also valleys"],[239,190,"8.  ROOFING","Roofing Materials","Synthetic underlayment (per SQ)","GAF FeltBuster or Owens Corning Deck Defense","SQ",28.0,0.0,1,""],[240,191,"8.  ROOFING","Roofing Materials","OSB roof decking \u2014 7/16\" (per sheet)","LP or Huber AdvanTech; replace damaged only","SHT",19.0,0.0,1,"Inspect after tear-off"],[241,192,"8.  ROOFING","Roofing Materials","Ridge cap shingles (per LF)","GAF TimberTex or CertainTeed ridge cap","LF",2.28,0.0,1,""],[242,193,"8.  ROOFING","Roofing Materials","Drip edge \u2014 2\" aluminum (per LF)","Per LF eaves & rakes","LF",1.55,0.0,1,""],[243,194,"8.  ROOFING","Roofing Materials","Pipe boot / EPDM flashing (ea.)","Lifetime Pipe Flashing 2\"-5\"","EA",25.0,0.0,1,"Per plumbing vent stack"],[244,195,"8.  ROOFING","Roofing Materials","Step flashing \u2014 galvanized (per LF)","28-ga at wall-to-roof junctions","LF",3.55,0.0,1,""],[245,196,"8.  ROOFING","Roofing Materials","Chimney flashing kit","Base + counter + cap; custom cut","EA",148.0,188.0,1,""],[246,197,"8.  ROOFING","Roofing Materials","Continuous ridge vent (per LF)","Air Vent ShingleVent II or GAF RidgePoint","LF",4.85,0.0,1,""],[247,198,"8.  ROOFING","Roofing Materials","Box vent \u2014 static (ea.)","Lomanco BIB-14 or Air Vent 750","EA",23.0,36.0,1,""],[249,199,"8.  ROOFING","Roofing Labor","Tear-off labor \u2014 1 layer (per SQ)","Remove, stack, dispose to dumpster","SQ",0.0,65.0,1,""],[250,200,"8.  ROOFING","Roofing Labor","Tear-off \u2014 each add'l layer (per SQ)","Per extra layer over 1","SQ",0.0,30.0,1,""],[251,201,"8.  ROOFING","Roofing Labor","Shingle installation labor (per SQ)","Nail, seal, ridge, step flashing","SQ",0.0,88.0,1,""],[252,202,"8.  ROOFING","Roofing Labor","Decking repair labor (per sheet)","Remove/replace damaged OSB","SHT",0.0,48.0,1,""],[257,203,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","5\" K-style seamless gutter (per LF)","Aluminum; painted to match fascia","LF",4.28,3.78,1,"Roofing co. often bundles"],[258,204,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","6\" K-style seamless gutter (per LF)","Larger capacity; heavy rain areas","LF",5.55,3.78,1,""],[259,205,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","3\"\u00d74\" aluminum downspout (per LF)","Rectangular; painted","LF",3.55,0.0,1,""],[260,206,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","Downspout elbows (ea.)","A or B style; painted","EA",5.55,0.0,1,""],[261,207,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","Downspout extension \u2014 pop-up (ea.)","Hinged 4' Flex-A-Spout","EA",13.0,0.0,1,"Keep water away from foundation"],[262,208,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","Gutter guard \u2014 micro-mesh (per LF)","LeafFilter or Gutter Helmet-type","LF",9.0,3.55,1,"Sell point; premium flips"],[263,209,"9.  GUTTERS & EXTERIOR WATERPROOFING","Gutters & Downspouts","Splash blocks (ea.)","Concrete or polymer","EA",13.0,0.0,1,"At each downspout termination"],[265,210,"9.  GUTTERS & EXTERIOR WATERPROOFING","Waterproofing & Drainage","Crawlspace vapor barrier \u2014 6-mil poly","Per SF; tape all seams","SF",0.23,0.46,1,""],[266,211,"9.  GUTTERS & EXTERIOR WATERPROOFING","Waterproofing & Drainage","Foundation waterproofing coat","Drylok Extreme or Drylok E1; per SF","SF",0.88,0.0,1,"Interior basement walls"],[267,212,"9.  GUTTERS & EXTERIOR WATERPROOFING","Waterproofing & Drainage","Interior basement drain system","French drain + sump perimeter; bid","LS",0,0,1,"Get waterproofing specialist bid"],[268,213,"9.  GUTTERS & EXTERIOR WATERPROOFING","Waterproofing & Drainage","Window well \u2014 galvanized (ea.)","BILCO EWS or Master Series 24\"","EA",88.0,128.0,1,"Per basement egress window"],[273,214,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","2\u00d74\u00d78 stud \u2014 KD (ea.)","Dimensional; S4S kiln-dried","EA",5.28,0.0,1,""],[274,215,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","2\u00d76\u00d78 stud \u2014 KD (ea.)","Exterior wall framing","EA",7.55,0.0,1,""],[275,216,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","2\u00d78\u00d716 joist (ea.)","Floor / ceiling joist","EA",19.0,0.0,1,""],[276,217,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","2\u00d710\u00d716 joist (ea.)","Larger floor joist","EA",24.0,0.0,1,""],[277,218,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","LVL beam \u2014 1.75\"\u00d79.5\" (per LF)","Weyerhaeuser or LP LVL","LF",14.0,0.0,1,"Engineer stamp may be req'd"],[278,219,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","LVL beam \u2014 1.75\"\u00d711.25\" (per LF)","Larger span","LF",17.0,0.0,1,""],[279,220,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","OSB sheathing \u2014 7/16\" 4\u00d78 (ea.)","LP or Huber; wall + roof","SHT",19.0,0.0,1,""],[280,221,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","OSB subfloor \u2014 3/4\" T&G (ea.)","Huber AdvanTech or LP TechShield","SHT",35.0,0.0,1,""],[281,222,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","Plywood \u2014 3/4\" CDX 4\u00d78 (ea.)","General structural","SHT",39.0,0.0,1,""],[282,223,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","Joist hanger \u2014 LUS26 (ea.)","Simpson Strong-Tie","EA",1.88,0.0,1,""],[283,224,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","Post cap \u2014 Simpson PC64 (ea.)","Beam to post connection","EA",5.55,0.0,1,""],[284,225,"10. FRAMING & STRUCTURAL","Framing Lumber & Materials","Framing nails \u2014 16d sinker 5 lb (box)","Per box","BOX",14.0,0.0,1,""],[286,226,"10. FRAMING & STRUCTURAL","Framing Labor","Frame interior walls \u2014 non-load bearing","Per LF of wall","LF",0.0,6.55,1,""],[287,227,"10. FRAMING & STRUCTURAL","Framing Labor","Frame exterior walls \u2014 sheathed","Per LF of wall","LF",0.0,9.55,1,""],[288,228,"10. FRAMING & STRUCTURAL","Framing Labor","Install subfloor (glue & screw)","Per SF","SF",0.0,1.28,1,""],[289,229,"10. FRAMING & STRUCTURAL","Framing Labor","Header install (ea.)","Window & door headers","EA",0.0,128.0,1,""],[290,230,"10. FRAMING & STRUCTURAL","Framing Labor","Floor joist sistering / repair","Reinforce or sister damaged joists","LF",0.0,0,1,"Get structural carpenter bid"],[291,231,"10. FRAMING & STRUCTURAL","Framing Labor","Structural engineer consult","For load-bearing wall mods","EA",658.0,0.0,1,"Required for beam work"],[292,232,"10. FRAMING & STRUCTURAL","Framing Labor","Building / structural permit","City permit; varies by jurisdiction","LS",0,0,1,""],[297,233,"11. INSULATION","Attic Insulation","Blown-in fiberglass \u2014 R-38 (per SF)","Machine blown to 10-11\" depth","SF",0.88,0.0,1,"Most common attic insulation"],[298,234,"11. INSULATION","Attic Insulation","Blown-in cellulose \u2014 R-38 (per SF)","Recycled; greener alternative","SF",0.78,0.0,1,""],[299,235,"11. INSULATION","Attic Insulation","Attic hatch insulation cover","Battic Door Energy Conserv. Cover","EA",88.0,35.0,1,"Often forgotten; big heat loss"],[301,236,"11. INSULATION","Wall & Floor Insulation","Batt \u2014 R-13 kraft-faced (per SF)","Johns Manville or Owens Corning 2\u00d74 walls","SF",0.47,0.0,1,""],[302,237,"11. INSULATION","Wall & Floor Insulation","Batt \u2014 R-19 kraft-faced (per SF)","2\u00d76 exterior walls","SF",0.67,0.0,1,""],[303,238,"11. INSULATION","Wall & Floor Insulation","Batt \u2014 R-19 floor (per SF)","Friction fit under floor joists","SF",0.67,0.0,1,"Crawlspace underfloor"],[304,239,"11. INSULATION","Wall & Floor Insulation","Rigid foam XPS \u2014 1\" 4\u00d78 (per sheet)","Owens Corning Foamular 150; R-5","SHT",23.0,0.0,1,""],[306,240,"11. INSULATION","Air Sealing & Housewrap","Spray foam \u2014 2 lb closed-cell rim joist","Per SF of rim joist; 2\" thick","SF",0,0,1,"Get spray foam contractor bid"],[307,241,"11. INSULATION","Air Sealing & Housewrap","Caulk & foam air sealing \u2014 rough-in","Seal all penetrations pre-drywall","LS",0,0,1,"Do before insulation"],[308,242,"11. INSULATION","Air Sealing & Housewrap","House wrap \u2014 Tyvek HomeWrap (per roll)","1,000 SF per roll","RL",188.0,0.0,1,"Exterior wall WRB"],[309,243,"11. INSULATION","Air Sealing & Housewrap","Housewrap tape (per roll)","DuPont Flashing Tape 4\"","RL",19.0,0.0,1,""],[310,244,"11. INSULATION","Air Sealing & Housewrap","Insulation installation labor (per SF)","All batt install labor","SF",0.0,0.57,1,""],[315,245,"12. DRYWALL & PLASTER","Drywall Materials","Drywall \u2014 1/2\" 4\u00d78 (per sheet)","Gold Bond or National Gypsum","SHT",13.0,0.0,1,"Standard walls & ceilings"],[316,246,"12. DRYWALL & PLASTER","Drywall Materials","Drywall \u2014 1/2\" 4\u00d712 (per sheet)","Reduces butt joints","SHT",18.0,0.0,1,""],[317,247,"12. DRYWALL & PLASTER","Drywall Materials","Drywall \u2014 5/8\" Type X (per sheet)","Fire-rated: garage, stairwells","SHT",18.0,0.0,1,"Required in garage per code"],[318,248,"12. DRYWALL & PLASTER","Drywall Materials","Moisture-resistant drywall (per sheet)","Gold Bond XP or National Gypsum Hi-Abuse","SHT",19.0,0.0,1,"Bath walls / laundry"],[319,249,"12. DRYWALL & PLASTER","Drywall Materials","Cement board \u2014 1/2\" HardieBacker (ea.)","James Hardie 3\u00d75 sheet","SHT",23.0,0.0,1,"Tile substrate: bath / kitchen"],[320,250,"12. DRYWALL & PLASTER","Drywall Materials","Schluter KERDI membrane (per SF)","Shower waterproof membrane","SF",3.88,0.0,1,""],[321,251,"12. DRYWALL & PLASTER","Drywall Materials","RedGard liquid membrane (per gal)","Custom Building Products; brush-on","GA",67.0,0.0,1,"Shower waterproofing alternative"],[322,252,"12. DRYWALL & PLASTER","Drywall Materials","Joint compound \u2014 5-gal bucket","USG Sheetrock All-Purpose","BKT",17.0,0.0,1,""],[323,253,"12. DRYWALL & PLASTER","Drywall Materials","Paper tape (per roll)","USG Sheetrock paper tape 500'","RL",4.55,0.0,1,""],[324,254,"12. DRYWALL & PLASTER","Drywall Materials","Metal corner bead (per LF)","USG Beadex 1-1/4\" metal","LF",0.36,0.0,1,""],[325,255,"12. DRYWALL & PLASTER","Drywall Materials","Coarse-thread drywall screws \u2014 1-5/8\" (box)","Per 1-lb box","BOX",3.55,0.0,1,""],[327,256,"12. DRYWALL & PLASTER","Drywall Labor","Hang drywall \u2014 walls (per SF)","Per SF of wall surface","SF",0.0,0.67,1,""],[328,257,"12. DRYWALL & PLASTER","Drywall Labor","Hang drywall \u2014 ceilings (per SF)","Per SF of ceiling; harder","SF",0.0,0.92,1,""],[329,258,"12. DRYWALL & PLASTER","Drywall Labor","Tape & float \u2014 Level 4 finish (per SF)","3-coat finish; paint-ready","SF",0.0,1.48,1,"Standard for painted surfaces"],[330,259,"12. DRYWALL & PLASTER","Drywall Labor","Texture \u2014 knockdown (per SF)","Spray + knife; match existing","SF",0.0,0.57,1,""],[331,260,"12. DRYWALL & PLASTER","Drywall Labor","Texture \u2014 orange peel (per SF)","Light spray texture","SF",0.0,0.52,1,""],[336,261,"13. FLOORING \u2014 LVP & HARDWOOD","Subfloor Prep","Subfloor inspection + repair (per hr)","Glue/screw squeaks; replace rot","HR",0.0,68.0,1,"Do before any floor install"],[337,262,"13. FLOORING \u2014 LVP & HARDWOOD","Subfloor Prep","Self-leveling compound (per 50-lb bag)","Levelquik RS; ~40 SF at 1/8\"","BAG",29.0,0.0,1,""],[338,263,"13. FLOORING \u2014 LVP & HARDWOOD","Subfloor Prep","Plywood underlayment \u2014 1/4\" (per sheet)","Luan over vinyl substrate","SHT",29.0,0.0,1,""],[340,264,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","LVP \u2014 budget 6mm 12-mil wear layer","LifeProof or TrafficMaster (Home Depot)","SF",1.88,2.05,1,"Good entry-level flip"],[341,265,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","LVP \u2014 mid-grade 8mm 20-mil rigid core","COREtec Plus or Shaw Floorte","SF",2.78,2.05,1,"Best value for flips"],[342,266,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","LVP \u2014 upper mid-grade 12mm SPC","COREtec Pro or Pergo Extreme","SF",3.88,2.05,1,"Premium flip / high ARV homes"],[343,267,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","LVP foam underlayment 2mm (per SF)","Skip if LVP has attached pad","SF",0.29,0.0,1,""],[344,268,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","Stair nosing \u2014 LVP matching (ea.)","Per step nose","EA",36.0,26.0,1,""],[345,269,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","T-bar transition strip (ea.)","Room-to-room same height","EA",19.0,0.0,1,""],[346,270,"13. FLOORING \u2014 LVP & HARDWOOD","Luxury Vinyl Plank (LVP)","Reducer transition strip (ea.)","Floor to lower surface","EA",19.0,0.0,1,""],[348,271,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Solid hardwood \u2014 3/4\" oak select grade","3-1/4\" plank; nail-down","SF",4.55,3.55,1,""],[349,272,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Solid hardwood \u2014 3/4\" #1 common oak","Slight character variation","SF",3.88,3.55,1,""],[350,273,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Engineered hardwood \u2014 1/2\" 5-ply","Shaw or Armstrong; click or glue","SF",3.55,2.55,1,"Good over slab"],[351,274,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Hardwood \u2014 sand + 2-coat oil poly (refinish)","Existing sound hardwood","SF",0.0,3.55,1,""],[352,275,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Hardwood \u2014 sand + stain + 2-coat poly","Full stain & finish","SF",0.36,4.55,1,""],[353,276,"13. FLOORING \u2014 LVP & HARDWOOD","Hardwood Flooring","Hardwood flooring adhesive (per gal)","Bostik Best or Roberts 1540","GA",49.0,0.0,1,"Glue-down method"],[358,277,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Ceramic floor tile \u2014 12\u00d712 (per SF)","Daltile or MSI entry-level ceramic","SF",2.28,7.05,1,"Bath / laundry"],[359,278,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Porcelain tile \u2014 12\u00d724 rectified (per SF)","Marazzi or MSI Dimensions","SF",3.88,8.55,1,""],[360,279,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Porcelain tile \u2014 18\u00d718 (per SF)","Large format; kitchen / foyer","SF",4.55,9.55,1,""],[361,280,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Mosaic tile \u2014 2\u00d72 mesh (per SF)","Floor inset or shower floor","SF",6.55,9.05,1,""],[362,281,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Subway tile \u2014 3\u00d76 ceramic (per SF)","Daltile Restore or MSI Subway","SF",2.78,8.05,1,"Backsplash & shower walls"],[363,282,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Thinset mortar \u2014 gray 50-lb (per bag)","Custom Building Pro Lite","BAG",19.0,0.0,1,""],[364,283,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Thinset mortar \u2014 white 50-lb (per bag)","For light tile / natural stone","BAG",23.0,0.0,1,""],[365,284,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Grout \u2014 sanded 10-lb (per bag)","Custom Building Polyblend Plus","BAG",17.0,0.0,1,"Joints > 1/8\""],[366,285,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Grout \u2014 unsanded 10-lb (per bag)","Custom Building Polyblend Plus Unsanded","BAG",17.0,0.0,1,"Joints < 1/8\""],[367,286,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Grout sealer (per quart)","Aqua Mix Sealer's Choice Gold","QT",24.0,0.0,1,""],[368,287,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Schluter Jolly edge trim (per LF)","Stainless; exposed tile edges","LF",5.55,0.0,1,""],[369,288,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Shower niche \u2014 prefab (ea.)","Schluter KERDI-BOARD-SN 12\u00d724","EA",68.0,128.0,1,""],[370,289,"14. FLOORING \u2014 TILE & CARPET","Ceramic & Porcelain Tile","Tile installation labor (per SF)","Floor & wall tile set, grout","SF",0.0,8.05,1,""],[372,290,"14. FLOORING \u2014 TILE & CARPET","Carpet","Carpet \u2014 budget 28 oz cut pile (per SY)","Shaw or Mohawk builder grade","SY",13.0,6.05,1,"Bedrooms"],[373,291,"14. FLOORING \u2014 TILE & CARPET","Carpet","Carpet \u2014 mid-grade 32 oz (per SY)","Shaw Life Happens or Mohawk Wear-Dated","SY",17.0,6.05,1,"Better flips"],[374,292,"14. FLOORING \u2014 TILE & CARPET","Carpet","Carpet pad \u2014 6 lb rebond (per SY)","Standard builder grade","SY",4.55,0.0,1,""],[375,293,"14. FLOORING \u2014 TILE & CARPET","Carpet","Carpet pad \u2014 8 lb rebond (per SY)","Premium; reduces noise","SY",5.28,0.0,1,""],[376,294,"14. FLOORING \u2014 TILE & CARPET","Carpet","Tack strip (per LF)","Wood w/ nails; per LF perimeter","LF",0.36,0.0,1,""],[377,295,"14. FLOORING \u2014 TILE & CARPET","Carpet","Carpet installation labor (per SY)","Stretch & tack, incl. pad install","SY",0.0,6.05,1,""],[382,296,"15. EXTERIOR SIDING & PAINT","Siding Materials","Vinyl siding \u2014 double 4\" 0.044\" (per SQ)","Georgia-Pacific Vesta or CertainTeed Monogram","SQ",128.0,128.0,1,"Standard flip choice"],[383,297,"15. EXTERIOR SIDING & PAINT","Siding Materials","Vinyl siding \u2014 dutch lap (per SQ)","CertainTeed Monogram or Gentek","SQ",148.0,128.0,1,"Slightly more curb appeal"],[384,298,"15. EXTERIOR SIDING & PAINT","Siding Materials","LP SmartSide \u2014 4\" lap (per SQ)","LP SmartSide 440; paintable","SQ",198.0,148.0,1,"Mid/upper flip; better ROI"],[385,299,"15. EXTERIOR SIDING & PAINT","Siding Materials","HardiePlank fiber cement (per SQ)","James Hardie HZ5 primed","SQ",228.0,188.0,1,"Premium; best resale"],[386,300,"15. EXTERIOR SIDING & PAINT","Siding Materials","Vinyl corner posts (per LF)","Match siding color","LF",2.78,0.0,1,""],[387,301,"15. EXTERIOR SIDING & PAINT","Siding Materials","J-channel vinyl (per LF)","Window & door surrounds","LF",1.55,0.0,1,""],[388,302,"15. EXTERIOR SIDING & PAINT","Siding Materials","Exterior trim board 5/4\u00d74 (per LF)","Kleer or Versatex PVC","LF",2.78,0.0,1,""],[389,303,"15. EXTERIOR SIDING & PAINT","Siding Materials","Exterior trim board 5/4\u00d76 (per LF)","Kleer or Versatex PVC","LF",3.28,0.0,1,""],[390,304,"15. EXTERIOR SIDING & PAINT","Siding Materials","Soffit \u2014 vented vinyl (per SF)","Wolverine or CertainTeed","SF",1.88,0.0,1,""],[391,305,"15. EXTERIOR SIDING & PAINT","Siding Materials","Fascia \u2014 aluminum wrap (per LF)","Pre-painted .019 alum.","LF",2.55,0.0,1,""],[392,306,"15. EXTERIOR SIDING & PAINT","Siding Materials","Exterior caulk \u2014 paintable (per tube)","NPC Solar Seal or OSI Quad","TU",5.55,0.0,1,""],[394,307,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Power wash \u2014 full exterior","Before paint or new siding","EA",0.0,288.0,1,""],[395,308,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Exterior primer \u2014 oil-based (per gal)","Sherwin-Williams Exterior Primer","GA",39.0,0.0,1,""],[396,309,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Exterior body paint \u2014 satin (per gal)","SW Duration or Ben Moore Aura Ext.","GA",48.0,0.0,1,"~350 SF/gal"],[397,310,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Exterior trim paint \u2014 semi-gloss (per gal)","SW Duration or Aura Ext. semi-gloss","GA",49.0,0.0,1,""],[398,311,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Exterior paint labor \u2014 spray + back-roll (SF)","Per SF of wall surface","SF",0.0,1.78,1,""],[399,312,"15. EXTERIOR SIDING & PAINT","Exterior Paint","Exterior trim painting labor (per LF)","Brush & roll all trim","LF",0.0,1.55,1,""],[404,313,"16. WINDOWS & EXTERIOR DOORS","Windows","Double-hung window \u2014 vinyl 30\"\u00d748\"","Jeld-Wen W-2500 or Andersen 100 Series","EA",288.0,188.0,1,"Low-E argon; standard bedrooms"],[405,314,"16. WINDOWS & EXTERIOR DOORS","Windows","Double-hung window \u2014 vinyl 36\"\u00d760\"","Living room / larger openings","EA",368.0,188.0,1,""],[406,315,"16. WINDOWS & EXTERIOR DOORS","Windows","Casement window \u2014 vinyl (ea.)","Jeld-Wen V-2500 or Andersen 100","EA",348.0,188.0,1,""],[407,316,"16. WINDOWS & EXTERIOR DOORS","Windows","Picture window \u2014 vinyl fixed (ea.)","Fixed; large format light","EA",288.0,148.0,1,""],[408,317,"16. WINDOWS & EXTERIOR DOORS","Windows","Slider window \u2014 vinyl 60\"\u00d736\" (ea.)","Horizontal sliding","EA",328.0,168.0,1,""],[409,318,"16. WINDOWS & EXTERIOR DOORS","Windows","Egress window \u2014 basement (ea.)","Min 5.7 SF opening per code","EA",588.0,355.0,1,"Include well if below grade"],[410,319,"16. WINDOWS & EXTERIOR DOORS","Windows","Window flashing tape (per roll)","DuPont StraightFlash 3\" or 4\"","RL",29.0,0.0,1,"At rough opening before install"],[411,320,"16. WINDOWS & EXTERIOR DOORS","Windows","Window brickmold trim (per LF)","Primed MDF or PVC","LF",2.55,0.0,1,""],[413,321,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Exterior door \u2014 steel 36\" 6-panel","Therma-Tru Benchmark or ReliaBilt","EA",378.0,288.0,1,"Prehung, inswing"],[414,322,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Exterior door \u2014 fiberglass woodgrain","Therma-Tru Fiber-Classic Oak","EA",628.0,288.0,1,"Better ROI; mid/upper flips"],[415,323,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Entry door \u2014 glass lite prehung","Half-lite or 9-lite; fiberglass","EA",788.0,328.0,1,"Curb appeal sell point"],[416,324,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Sliding patio door \u2014 6' vinyl","JELD-WEN V-4500 or Andersen 200","EA",788.0,288.0,1,""],[417,325,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","French patio door \u2014 6' fiberglass","Therma-Tru; inswing","EA",1258.0,328.0,1,"Premium; mid/upper flip"],[418,326,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Garage door \u2014 16\"\u00d77\" insulated steel","Clopay Classic Steel or Wayne Dalton 9100","EA",858.0,288.0,1,"2-car; R-6 insulated"],[419,327,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Garage door opener \u2014 3/4 HP belt drive","LiftMaster 8550W or Chamberlain B2405","EA",288.0,128.0,1,"WiFi + 2 remotes + keypad"],[420,328,"16. WINDOWS & EXTERIOR DOORS","Exterior Doors","Entry lockset \u2014 deadbolt combo","Schlage B60N + Plymouth knob keyed same","EA",78.0,26.0,1,""],[425,329,"17. INTERIOR DOORS & TRIM","Interior Doors","Interior door \u2014 hollow core 6-panel (ea.)","Masonite or ReliaBilt prehung","EA",118.0,68.0,1,"Standard bedrooms"],[426,330,"17. INTERIOR DOORS & TRIM","Interior Doors","Interior door \u2014 solid core (ea.)","Masonite Solidoor prehung","EA",188.0,68.0,1,"Master / bath = better soundproofing"],[427,331,"17. INTERIOR DOORS & TRIM","Interior Doors","Closet bifold door set (ea.)","Masonite or JELD-WEN 2-panel","EA",88.0,48.0,1,"Per closet"],[428,332,"17. INTERIOR DOORS & TRIM","Interior Doors","Passage lever set (ea.)","Schlage F10N-PLY-619 satin nickel","EA",44.0,19.0,1,""],[429,333,"17. INTERIOR DOORS & TRIM","Interior Doors","Privacy lever set \u2014 bath/bed (ea.)","Schlage F40N-PLY-619","EA",49.0,19.0,1,""],[430,334,"17. INTERIOR DOORS & TRIM","Interior Doors","Door hinges \u2014 3.5\" ball bearing (set of 3)","Stanley-National 3.5\" satin nickel","SET",13.0,0.0,1,""],[431,335,"17. INTERIOR DOORS & TRIM","Interior Doors","Door stop \u2014 baseboard mount (ea.)","Heavy-duty rubber bumper","EA",3.55,0.0,1,""],[433,336,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Baseboard \u2014 3-1/4\" finger-joint MDF (per LF)","PJBCOL or generic painted","LF",0.87,1.28,1,""],[434,337,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Baseboard \u2014 4\" colonial paint-grade (per LF)","Upgrade for better flips","LF",1.28,1.28,1,""],[435,338,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Door casing \u2014 2-1/2\" colonial (per LF)","Primed MDF; per LF both sides","LF",0.77,1.05,1,""],[436,339,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Window stool & apron (per window)","Wood or MDF sill set","EA",19.0,26.0,1,""],[437,340,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Crown molding \u2014 3-1/2\" paint-grade (per LF)","MDF finger-joint prime","LF",2.55,3.55,1,"Premium flip only"],[438,341,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Shoe mold / quarter-round (per LF)","At floor-wall junction","LF",0.57,0.62,1,""],[439,342,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Stair tread \u2014 oak 1-1/8\" (ea.)","L.J. Smith or Coffman 48\"","EA",57.0,48.0,1,""],[440,343,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Stair riser \u2014 painted MDF (ea.)","5/8\" MDF riser","EA",19.0,26.0,1,""],[441,344,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Stair handrail \u2014 oak (per LF)","L.J. Smith #6010","LF",13.0,19.0,1,""],[442,345,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Stair baluster \u2014 wood turned (ea.)","L.J. Smith 1-3/16\" x 36\"","EA",5.55,8.05,1,""],[443,346,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Shelf & rod set \u2014 single tier (per LF)","1-1/4\" chrome rod + 16\" shelf","LF",4.28,2.05,1,"Per closet"],[444,347,"17. INTERIOR DOORS & TRIM","Trim & Millwork","Wire shelving \u2014 4-shelf kit (ea.)","ClosetMaid or Rubbermaid Fasttrack","EA",88.0,48.0,1,"Per closet"],[449,348,"18. INTERIOR PAINT","Paint Materials","PVA drywall primer (per gal)","Glidden PVA or Sherwin-Williams PrepRite","GA",23.0,0.0,1,"Roll new drywall before finish coat"],[450,349,"18. INTERIOR PAINT","Paint Materials","Stain-block primer \u2014 oil-based (per gal)","Zinsser BIN or Bulls Eye 1-2-3","GA",29.0,0.0,1,"Water stains, smoke, nicotine"],[451,350,"18. INTERIOR PAINT","Paint Materials","Interior wall paint \u2014 eggshell (per gal)","Sherwin-Williams ProMar 200 or Cashmere","GA",39.0,0.0,1,"~350-400 SF per coat"],[452,351,"18. INTERIOR PAINT","Paint Materials","Interior ceiling paint \u2014 flat (per gal)","Sherwin-Williams ProMar 200 Flat White","GA",33.0,0.0,1,""],[453,352,"18. INTERIOR PAINT","Paint Materials","Interior trim paint \u2014 semi-gloss (per gal)","Sherwin-Williams ProMar 200 Semi-Gloss","GA",39.0,0.0,1,""],[454,353,"18. INTERIOR PAINT","Paint Materials","Bath & kitchen paint \u2014 mold-resistant (per gal)","Sherwin-Williams Emerald Bath","GA",44.0,0.0,1,"Wet rooms only"],[456,354,"18. INTERIOR PAINT","Paint Labor","Prime + 2-coat walls & ceilings (per SF)","Roll prime + 2 finish coats","SF",0.0,0.77,1,"Per SF of total wall/ceiling surf."],[457,355,"18. INTERIOR PAINT","Paint Labor","Paint doors & trim labor (per LF)","Brush/spray prime + 2 finish coats","LF",0.0,1.55,1,""],[458,356,"18. INTERIOR PAINT","Paint Labor","Cabinet paint / refinish labor (per door)","Sand, prime, 2 spray finish coats","EA",13.0,29.0,1,"Budget alternative to replace cabinets"],[459,357,"18. INTERIOR PAINT","Paint Labor","Touch-up paint final walk (per hr)","Final punch-list touch-ups","HR",0.0,58.0,1,""],[464,358,"19. KITCHEN","Cabinets & Countertops","Base cabinets \u2014 RTA stock (per LF)","IKEA SEKTION, Fabuwood, or FrameCity","LF",148.0,0.0,1,"31\" ht, 24\" deep"],[465,359,"19. KITCHEN","Cabinets & Countertops","Upper cabinets \u2014 RTA stock (per LF)","IKEA SEKTION or Fabuwood 30\" ht","LF",113.0,0.0,1,""],[466,360,"19. KITCHEN","Cabinets & Countertops","Base cabinets \u2014 semi-custom (per LF)","KraftMaid or Aristokraft dovetail","LF",288.0,0.0,1,"Mid-level flip upgrade"],[467,361,"19. KITCHEN","Cabinets & Countertops","Upper cabinets \u2014 semi-custom (per LF)","KraftMaid or Aristokraft","LF",228.0,0.0,1,""],[468,362,"19. KITCHEN","Cabinets & Countertops","Kitchen island base cabinet","Stock 36\"\u00d736\" or custom","EA",458.0,0.0,1,""],[469,363,"19. KITCHEN","Cabinets & Countertops","Cabinet hardware \u2014 bar pulls (ea.)","Liberty or Amerock 3\" or 5\" pull","EA",4.55,0.0,1,""],[470,364,"19. KITCHEN","Cabinets & Countertops","Cabinet installation labor (per hr)","Hang + level + secure all cabinets","HR",0.0,78.0,1,"~1.5-2 hrs per linear ft of run"],[471,365,"19. KITCHEN","Cabinets & Countertops","Countertop \u2014 laminate post-form (per LF)","Wilsonart or Formica; HD brand","LF",39.0,48.0,1,"Budget flip"],[472,366,"19. KITCHEN","Cabinets & Countertops","Countertop \u2014 butcher block (per LF)","IKEA Badelunda or Lumber Liquidators","LF",68.0,48.0,1,"Budget-friendly upgrade"],[473,367,"19. KITCHEN","Cabinets & Countertops","Countertop \u2014 quartz budget (per SF installed)","MSI Q or Silestone Lyra; incl. fab + install","SF",65.0,0.0,1,"Mid-level flip standard"],[474,368,"19. KITCHEN","Cabinets & Countertops","Countertop \u2014 quartz premium (per SF installed)","Cambria or Caesarstone; incl. fab + install","SF",88.0,0.0,1,"High ARV flips"],[475,369,"19. KITCHEN","Cabinets & Countertops","Countertop \u2014 granite budget (per SF installed)","Colonial White or Uba Tuba; incl. fab","SF",48.0,0.0,1,""],[476,370,"19. KITCHEN","Cabinets & Countertops","Backsplash \u2014 3\u00d76 subway ceramic (per SF)","Daltile Restore or American Olean","SF",2.78,8.55,1,""],[477,371,"19. KITCHEN","Cabinets & Countertops","Backsplash \u2014 glass mosaic (per SF)","2\" sq mesh; MSI or Daltile","SF",8.55,9.55,1,"Upgrade option"],[479,372,"19. KITCHEN","Kitchen Appliances","Refrigerator \u2014 French door SS","LG LRFXS2503S or Samsung RF23M","EA",1258.0,78.0,1,""],[480,373,"19. KITCHEN","Kitchen Appliances","Refrigerator \u2014 top-freezer budget","GE GTH18GBNRWW white 18 cu ft","EA",688.0,78.0,1,"Budget flip option"],[481,374,"19. KITCHEN","Kitchen Appliances","Range \u2014 freestanding gas 30\"","GE JGB635EKES or LG LRG3061ST","EA",758.0,78.0,1,""],[482,375,"19. KITCHEN","Kitchen Appliances","Range \u2014 freestanding electric smooth-top","GE JBS60EKES or Frigidaire FCRE3052AS","EA",628.0,78.0,1,""],[483,376,"19. KITCHEN","Kitchen Appliances","Dishwasher \u2014 built-in SS quiet","Bosch SHPM88Z75N or GE GDT695SSJSS","EA",558.0,128.0,1,"< 50 dB; sell point"],[484,377,"19. KITCHEN","Kitchen Appliances","Dishwasher \u2014 budget","GE GDT226SSLSS or Frigidaire FDPC4221AS","EA",328.0,128.0,1,""],[485,378,"19. KITCHEN","Kitchen Appliances","Microwave OTR \u2014 SS 1.9 cu ft","GE JVM3160RFSS or LG LMV2031ST","EA",298.0,128.0,1,""],[490,379,"20. BATHROOMS","Vanities & Tops","Vanity \u2014 24\" single shaker (ea.)","Home Depot Glacier Bay or OVE Decors","EA",248.0,148.0,1,"Per bathroom"],[491,380,"20. BATHROOMS","Vanities & Tops","Vanity \u2014 36\" single shaker (ea.)","Home Depot Hampton Bay or Foremost","EA",348.0,148.0,1,""],[492,381,"20. BATHROOMS","Vanities & Tops","Vanity \u2014 60\" double shaker (ea.)","OVE Decors Tahoe or Wyndham WH7560","EA",788.0,168.0,1,"Master bath"],[493,382,"20. BATHROOMS","Vanities & Tops","Vanity top \u2014 cultured marble w/ bowl","Includes integrated sink","EA",148.0,98.0,1,""],[494,383,"20. BATHROOMS","Vanities & Tops","Vanity top \u2014 quartz w/ undermount bowl","Upgrade; mid/upper flip","EA",288.0,128.0,1,""],[495,384,"20. BATHROOMS","Vanities & Tops","Vanity mirror \u2014 frameless polished (ea.)","Kohler K-99007 or similar","EA",57.0,36.0,1,""],[496,385,"20. BATHROOMS","Vanities & Tops","Vanity mirror \u2014 framed 30\" (ea.)","Kichler or Progress framed","EA",88.0,36.0,1,""],[497,386,"20. BATHROOMS","Vanities & Tops","Medicine cabinet \u2014 recessed 14\"\u00d718\" (ea.)","Kohler K-2911 or Robern M2030","EA",128.0,78.0,1,""],[499,387,"20. BATHROOMS","Shower & Tub","Shower door \u2014 frameless 3/8\" glass (ea.)","DreamLine SHDR-20 or Kohler Levity","EA",788.0,188.0,1,"Sell point; use in master if possible"],[500,388,"20. BATHROOMS","Shower & Tub","Shower door \u2014 framed chrome (ea.)","DreamLine SHDR-14 or Kohler KD621T","EA",288.0,148.0,1,"Budget option"],[501,389,"20. BATHROOMS","Shower & Tub","Shower curtain rod \u2014 flanged (ea.)","Moen DN2141BN or Delta 41\u2033 curved","EA",68.0,26.0,1,"Tub/shower combo"],[503,390,"20. BATHROOMS","Bathroom Accessories","Towel bar \u2014 24\" brushed nickel (ea.)","Moen DN4418BN or Delta 77224-SS","EA",36.0,21.0,1,"Per bathroom"],[504,391,"20. BATHROOMS","Bathroom Accessories","Towel bar \u2014 18\" (ea.)","Moen DN4418BN 18\" version","EA",28.0,21.0,1,""],[505,392,"20. BATHROOMS","Bathroom Accessories","Toilet paper holder (ea.)","Moen DN0708BN or Delta 77550-SS","EA",23.0,21.0,1,""],[506,393,"20. BATHROOMS","Bathroom Accessories","Towel ring (ea.)","Moen DN0708BN ring","EA",23.0,19.0,1,""],[507,394,"20. BATHROOMS","Bathroom Accessories","Robe hook \u2014 double (ea.)","Moen DN3702BN","EA",19.0,16.0,1,""],[508,395,"20. BATHROOMS","Bathroom Accessories","Bathroom vanity light bar \u2014 3-light (ea.)","Kichler 45686NI or Progress P2035-09","EA",78.0,47.0,1,""],[509,396,"20. BATHROOMS","Bathroom Accessories","Bathroom exhaust fan \u2014 80 CFM (ea.)","Panasonic FV-08VQ5 WhisperCeiling","EA",59.0,87.0,1,"Per bath"],[513,397,"21. CONCRETE & FLATWORK","","Concrete driveway \u2014 4\" slab (per SF)","Broom finish + rebar; incl. form + pour","SF",0,0,1,"Get concrete contractor bid"],[514,398,"21. CONCRETE & FLATWORK","","Concrete sidewalk \u2014 3' wide (per LF)","4\" slab, broom finish","LF",0,0,1,""],[515,399,"21. CONCRETE & FLATWORK","","Concrete steps \u2014 poured 3 risers","4' wide; form, pour, finish","EA",0,0,1,""],[516,400,"21. CONCRETE & FLATWORK","","Concrete patio \u2014 4\" broom (per SF)","Basic broom finish","SF",0,0,1,""],[517,401,"21. CONCRETE & FLATWORK","","Concrete saw-cut & remove (per SF)","Existing concrete demo","SF",0,2.55,1,""],[518,402,"21. CONCRETE & FLATWORK","","Gravel / road base 4\" compact (per SF)","Under new concrete slabs","SF",0.57,0.0,1,""],[522,403,"22. LANDSCAPING & SITE WORK","","Final grading \u2014 slope from foundation (per SF)","4\" topsoil; slope away 6\" per 10'","SF",0,0,1,"Critical for drainage"],[523,404,"22. LANDSCAPING & SITE WORK","","Sod \u2014 fescue/bluegrass (per SY)","Installed; incl. prep & roll","SY",0,0,1,""],[524,405,"22. LANDSCAPING & SITE WORK","","Hydroseed large areas (per SF)","Cheaper than sod for large bare areas","SF",0,0.09,1,""],[525,406,"22. LANDSCAPING & SITE WORK","","Straw & seed \u2014 erosion control (per SF)","Bare areas post-grade","SF",0.05,0.08,1,""],[526,407,"22. LANDSCAPING & SITE WORK","","Mulch \u2014 hardwood 3\" (per CY)","Deliver + spread","CY",58.0,36.0,1,"Foundation beds"],[527,408,"22. LANDSCAPING & SITE WORK","","Foundation shrubs (ea.)","3-gal planted","EA",29.0,26.0,1,""],[528,409,"22. LANDSCAPING & SITE WORK","","Tree removal \u2014 small < 6\" dia (ea.)","Cut, chip, stump grind","EA",0,0,1,"Get arborist bid"],[529,410,"22. LANDSCAPING & SITE WORK","","Privacy fence \u2014 6' cedar (per LF)","Dog-ear boards","LF",19.0,15.0,1,""],[530,411,"22. LANDSCAPING & SITE WORK","","Privacy fence \u2014 6' vinyl (per LF)","Shadowbox; low maintenance","LF",29.0,15.0,1,""],[534,412,"23. PERMITS & INSPECTIONS","","Building permit \u2014 structural","Framing, foundation, structural work","LS",0,0,1,"% of project value in most cities"],[535,413,"23. PERMITS & INSPECTIONS","","Electrical permit","Panel, rough, finish inspections","LS",0,0,1,""],[536,414,"23. PERMITS & INSPECTIONS","","Plumbing permit","Rough + final inspection","LS",0,0,1,""],[537,415,"23. PERMITS & INSPECTIONS","","Mechanical permit (HVAC)","Equipment + ductwork inspections","LS",0,0,1,""],[538,416,"23. PERMITS & INSPECTIONS","","Roofing permit","Required in most jurisdictions","LS",0,0,1,""],[539,417,"23. PERMITS & INSPECTIONS","","Certificate of Occupancy (CO)","Final sign-off; required for sale","LS",0,0,1,""],[540,418,"23. PERMITS & INSPECTIONS","","Engineer / structural drawings","If load-bearing walls modified","LS",0,0,1,"Required by permit office"]];
+
+const STATES = [
+  {c:'BASE',n:'Midwest',  l:1.00,m:1.00},
+  {c:'CA',  n:'California',l:1.45,m:1.22},
+  {c:'AZ',  n:'Arizona',  l:1.05,m:1.08},
+  {c:'FL',  n:'Florida',  l:1.02,m:1.08},
+  {c:'HI',  n:'Hawaii',   l:1.55,m:1.65},
+  {c:'NV',  n:'Nevada',   l:1.12,m:1.10},
+  {c:'TX',  n:'Texas',    l:0.95,m:1.00},
+];
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let lMult = 1.55, mMult = 1.65, activeState = 'HI';
+let searchQ = '', filterMode = 'all';
+
+// Per-item state: row -> {qty, inc, matOvr, labOvr}
+// matOvr/labOvr = null (use base×mult) or number (user override)
+const IS = {};
+BASE.forEach(i => {
+  IS[i[0]] = {qty: 0, inc: i[9], matOvr: null, labOvr: null};
+});
+
+const TRADE_ORDER = [...new Set(BASE.map(i => i[2]))]
+  .sort((a,b) => parseInt(a) - parseInt(b));
+const collapsed = new Set();
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const fmt  = n => '$' + Math.round(n).toLocaleString();
+const fmtD = n => n === 0 ? '' : '$' + n.toFixed(2);
+const fmtI = n => n === 0 ? '' : '$' + parseFloat(n.toFixed(4));
+
+function getMatRate(item) {
+  const s = IS[item[0]];
+  return s.matOvr !== null ? s.matOvr : item[7] * mMult;
+}
+function getLabRate(item) {
+  const s = IS[item[0]];
+  return s.labOvr !== null ? s.labOvr : item[8] * lMult;
+}
+function getPrice(item) {
+  const s = IS[item[0]];
+  const m = getMatRate(item) * s.qty;
+  const l = getLabRate(item) * s.qty;
+  return {m, l, t: m+l};
+}
+function isModified(row) {
+  return IS[row].matOvr !== null || IS[row].labOvr !== null;
+}
+
+function hl(text, q) {
+  if (!q) return text;
+  const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text.replace(new RegExp(`(${esc})`, 'gi'), '<mark>$1</mark>');
+}
+
+// ─── FILTER ──────────────────────────────────────────────────────────────────
+function getFiltered() {
+  return BASE.filter(item => {
+    const s = IS[item[0]];
+    if (filterMode === 'qty' && s.qty === 0) return false;
+    if (filterMode === 'mod' && !isModified(item[0])) return false;
+    if (searchQ) {
+      const q = searchQ.toLowerCase();
+      return item[4].toLowerCase().includes(q) ||
+             item[5].toLowerCase().includes(q) ||
+             item[2].toLowerCase().includes(q) ||
+             item[3].toLowerCase().includes(q) ||
+             (item[10]||'').toLowerCase().includes(q);
+    }
+    return true;
+  });
+}
+
+function setF(mode, el) {
+  filterMode = mode;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+// ─── STATE SELECT ─────────────────────────────────────────────────────────────
+const stateGrid = document.getElementById('state-grid');
+STATES.forEach(s => {
+  const c = document.createElement('div');
+  c.className = 'sc' + (s.c === 'HI' ? ' active' : '');
+  c.dataset.code = s.c;
+  c.innerHTML = `<span class="scc">${s.c}</span><span class="scn">${s.n}</span><span class="scm">L×${s.l.toFixed(2)} M×${s.m.toFixed(2)}</span>`;
+  c.addEventListener('click', () => {
+    lMult = s.l; mMult = s.m; activeState = s.c;
+    document.querySelectorAll('.sc').forEach(x => x.classList.toggle('active', x.dataset.code === s.c));
+    document.getElementById('s3').textContent = s.c;
+    closeBS('bs-state');
+    render();
+  });
+  stateGrid.appendChild(c);
+});
+
+// ─── TRADE CHIPS ─────────────────────────────────────────────────────────────
+const chipsEl = document.getElementById('chips');
+TRADE_ORDER.forEach(t => {
+  const c = document.createElement('div');
+  c.className = 'chip';
+  c.textContent = t.replace(/^\d+\.\s+/, '');
+  c.addEventListener('click', () => {
+    filterMode = 't:' + t;
+    document.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+    c.classList.add('active');
+    render();
+  });
+  chipsEl.appendChild(c);
+});
+
+// ─── QTY ─────────────────────────────────────────────────────────────────────
+function adjQ(row, d) {
+  IS[row].qty = Math.max(0, IS[row].qty + d);
+  if (IS[row].qty > 0) IS[row].inc = 1;
+  updateRow(row);
+  updateStats();
+}
+function setQ(row, v) {
+  IS[row].qty = Math.max(0, parseInt(v) || 0);
+  if (IS[row].qty > 0) IS[row].inc = 1;
+  updateRow(row);
+  updateStats();
+}
+function togInc(row) {
+  IS[row].inc = IS[row].inc === 1 ? 0 : 1;
+  updateRow(row);
+  updateStats();
+}
+
+// ─── PRICE EDITING ───────────────────────────────────────────────────────────
+let openEditorRow = null;
+
+function toggleEditor(row) {
+  const el = document.querySelector(`[data-row="${row}"]`);
+  if (!el) return;
+  const pe = el.querySelector('.price-editor');
+  const btn = el.querySelector('.c-edit-btn');
+  if (openEditorRow !== null && openEditorRow !== row) {
+    const prevEl = document.querySelector(`[data-row="${openEditorRow}"]`);
+    if (prevEl) {
+      prevEl.querySelector('.price-editor').classList.remove('open');
+      prevEl.querySelector('.c-edit-btn').classList.remove('active-edit');
+    }
+  }
+  const isOpen = pe.classList.contains('open');
+  pe.classList.toggle('open', !isOpen);
+  btn.classList.toggle('active-edit', !isOpen);
+  openEditorRow = isOpen ? null : row;
+  if (!isOpen) {
+    const item = BASE.find(i => i[0] === row);
+    const s = IS[row];
+    const matInp = pe.querySelector('.mat-inp');
+    const labInp = pe.querySelector('.lab-inp');
+    matInp.value = s.matOvr !== null ? s.matOvr : (item[7] * mMult).toFixed(2);
+    labInp.value = s.labOvr !== null ? s.labOvr : (item[8] * lMult).toFixed(2);
+    matInp.focus();
+  }
+}
+
+function applyPrice(row, type, val) {
+  const n = parseFloat(val);
+  if (isNaN(n) || n < 0) return;
+  if (type === 'mat') IS[row].matOvr = n === 0 && BASE.find(i=>i[0]===row)[7] === 0 ? null : n;
+  else IS[row].labOvr = n === 0 && BASE.find(i=>i[0]===row)[8] === 0 ? null : n;
+  updateRow(row);
+  updateStats();
+}
+
+function resetPrice(row) {
+  IS[row].matOvr = null;
+  IS[row].labOvr = null;
+  const el = document.querySelector(`[data-row="${row}"]`);
+  if (el) {
+    const item = BASE.find(i => i[0] === row);
+    const pe = el.querySelector('.price-editor');
+    pe.querySelector('.mat-inp').value = (item[7] * mMult).toFixed(2);
+    pe.querySelector('.lab-inp').value = (item[8] * lMult).toFixed(2);
+  }
+  updateRow(row);
+  updateStats();
+}
+
+// ─── UPDATE SINGLE ROW ────────────────────────────────────────────────────────
+function updateRow(row) {
+  const el = document.querySelector(`[data-row="${row}"]`);
+  if (!el) return;
+  const item = BASE.find(i => i[0] === row);
+  if (!item) return;
+  const s = IS[row];
+  const p = getPrice(item);
+  const hq = s.qty > 0;
+  const mod = isModified(row);
+
+  el.className = 'card' + (hq ? ' hq' : '') + (s.inc !== 1 ? ' excl' : '');
+
+  el.querySelector('.c-chk').className = 'c-chk' + (s.inc === 1 ? ' on' : '');
+
+  // Update rate badges
+  const mR = getMatRate(item);
+  const lR = getLabRate(item);
+  const mBadge = el.querySelector('.rb.m');
+  const lBadge = el.querySelector('.rb.l');
+  if (mBadge) {
+    mBadge.textContent = 'Mat ' + (mR > 0 ? fmtD(mR) : '—');
+    mBadge.classList.toggle('modified', IS[row].matOvr !== null);
+  }
+  if (lBadge) {
+    lBadge.textContent = 'Labor ' + (lR > 0 ? fmtD(lR) : '—');
+    lBadge.classList.toggle('modified', IS[row].labOvr !== null);
+  }
+
+  el.querySelector('.c-edit-btn').classList.toggle('active-edit', IS[row].matOvr !== null || IS[row].labOvr !== null);
+
+  const qi = el.querySelector('.qi');
+  qi.value = s.qty;
+  qi.className = 'qi' + (hq ? ' hv' : '');
+
+  const lt = el.querySelector('.c-lt');
+  if (p.t > 0) { lt.textContent = fmt(p.t); lt.className = 'c-lt hv'; }
+  else { lt.textContent = '—'; lt.className = 'c-lt z'; }
+}
+
+// ─── BUILD CARD ───────────────────────────────────────────────────────────────
+function buildCard(item) {
+  const s = IS[item[0]];
+  const p = getPrice(item);
+  const hq = s.qty > 0;
+  const mR = getMatRate(item);
+  const lR = getLabRate(item);
+  const mod = isModified(item[0]);
+
+  let rates = '';
+  if (item[7] > 0 || s.matOvr !== null)
+    rates += `<div class="rate-row"><span class="rb m${IS[item[0]].matOvr!==null?' modified':''}">Mat ${fmtD(mR)||'—'}</span><span class="rate-unit">/${item[6]}</span></div>`;
+  if (item[8] > 0 || s.labOvr !== null)
+    rates += `<div class="rate-row"><span class="rb l${IS[item[0]].labOvr!==null?' modified':''}">Labor ${fmtD(lR)||'—'}</span><span class="rate-unit">/${item[6]}</span></div>`;
+  if (!rates) rates = `<span class="rate-unit" style="font-size:9px;color:#ccc">Get bid / enter price below</span>`;
+
+  const card = document.createElement('div');
+  card.className = 'card' + (hq ? ' hq' : '') + (s.inc !== 1 ? ' excl' : '');
+  card.dataset.row = item[0];
+
+  const matVal = s.matOvr !== null ? s.matOvr : (item[7] * mMult).toFixed(2);
+  const labVal = s.labOvr !== null ? s.labOvr : (item[8] * lMult).toFixed(2);
+
+  card.innerHTML = `
+    <div class="c-top">
+      <div class="c-chk${s.inc===1?' on':''}"></div>
+      <div class="c-info">
+        <div class="c-desc">${hl(item[4], searchQ)}</div>
+        ${item[5] ? `<div class="c-spec">${hl(item[5], searchQ)}</div>` : ''}
+        ${item[10] ? `<div class="c-note">${item[10]}</div>` : ''}
+      </div>
+      <div class="c-edit-btn${mod?' active-edit':''}" title="Edit prices">✎</div>
+    </div>
+    <div class="price-editor">
+      <div class="pe-row">
+        <span class="pe-label">Material</span>
+        <input class="pe-input mat-inp" type="number" min="0" step="0.01" value="${matVal}" placeholder="0.00">
+        <span class="pe-unit">per ${item[6]}</span>
+        <button class="pe-reset" onclick="resetPrice(${item[0]})">Reset</button>
+      </div>
+      <div class="pe-row">
+        <span class="pe-label">Labor</span>
+        <input class="pe-input lab-inp" type="number" min="0" step="0.01" value="${labVal}" placeholder="0.00">
+        <span class="pe-unit">per ${item[6]}</span>
+      </div>
+    </div>
+    <div class="c-bot">
+      <div class="c-rates">${rates}</div>
+      <div class="c-qty">
+        <div class="qb" onclick="adjQ(${item[0]},-1)">−</div>
+        <input class="qi${hq?' hv':''}" type="number" min="0" value="${s.qty}"
+               onchange="setQ(${item[0]},this.value)" onfocus="this.select()">
+        <div class="qb" onclick="adjQ(${item[0]},1)">+</div>
+      </div>
+      <div class="c-lt${p.t>0?' hv':' z'}">${p.t>0?fmt(p.t):'—'}</div>
+    </div>
+  `;
+
+  card.querySelector('.c-chk').addEventListener('click', () => togInc(item[0]));
+  card.querySelector('.c-edit-btn').addEventListener('click', () => toggleEditor(item[0]));
+
+  const matInp = card.querySelector('.mat-inp');
+  const labInp = card.querySelector('.lab-inp');
+  matInp.addEventListener('change', e => applyPrice(item[0], 'mat', e.target.value));
+  matInp.addEventListener('blur',   e => applyPrice(item[0], 'mat', e.target.value));
+  labInp.addEventListener('change', e => applyPrice(item[0], 'lab', e.target.value));
+  labInp.addEventListener('blur',   e => applyPrice(item[0], 'lab', e.target.value));
+
+  return card;
+}
+
+// ─── RENDER ───────────────────────────────────────────────────────────────────
+function render() {
+  const items = getFiltered();
+  document.getElementById('ri').innerHTML =
+    `Showing <span>${items.length}</span> of <span>${BASE.length}</span> items`;
+
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+
+  if (items.length === 0) {
+    list.innerHTML = '<div class="empty"><div class="ei">🔍</div><p>No items match.</p></div>';
+    updateStats(); return;
+  }
+
+  const byTrade = {};
+  items.forEach(item => {
+    if (!byTrade[item[2]]) byTrade[item[2]] = {};
+    const st = item[3] || '';
+    if (!byTrade[item[2]][st]) byTrade[item[2]][st] = [];
+    byTrade[item[2]][st].push(item);
+  });
+
+  TRADE_ORDER.forEach(trade => {
+    if (!byTrade[trade]) return;
+    const subtrades = byTrade[trade];
+    const all = Object.values(subtrades).flat();
+    const tradeTot = all.reduce((s,i) => s + getPrice(i).t, 0);
+    const col = collapsed.has(trade);
+
+    const g = document.createElement('div');
+    const h = document.createElement('div');
+    h.className = 'tg-hdr' + (col ? ' col' : '');
+    h.innerHTML = `<span class="th-ch">▾</span><span class="th-nm">${trade}</span>${tradeTot>0?`<span class="th-tt">${fmt(tradeTot)}</span>`:''}`;
+    h.addEventListener('click', () => {
+      if (collapsed.has(trade)) collapsed.delete(trade);
+      else collapsed.add(trade);
+      render();
+    });
+    g.appendChild(h);
+
+    if (!col) {
+      Object.entries(subtrades).forEach(([st, its]) => {
+        if (st) {
+          const sh = document.createElement('div');
+          sh.className = 'st-hdr';
+          sh.textContent = st;
+          g.appendChild(sh);
+        }
+        its.forEach(item => g.appendChild(buildCard(item)));
+      });
+    }
+    list.appendChild(g);
+  });
+
+  updateStats();
+}
+
+// ─── STATS ────────────────────────────────────────────────────────────────────
+function updateStats() {
+  let tM=0, tL=0, act=0;
+  BASE.forEach(item => {
+    const p = getPrice(item);
+    tM += p.m; tL += p.l;
+    if (p.t > 0) act++;
+  });
+  const tot = tM + tL;
+  document.getElementById('tt').textContent = fmt(tot);
+  document.getElementById('s0').textContent = act;
+  document.getElementById('s1').textContent = fmt(tM);
+  document.getElementById('s2').textContent = fmt(tL);
+}
+
+// ─── SUMMARY ──────────────────────────────────────────────────────────────────
+function buildSummary() {
+  const body = document.getElementById('sum-body');
+  body.innerHTML = '';
+  let gM=0, gL=0;
+
+  TRADE_ORDER.forEach(t => {
+    const its = BASE.filter(i => i[2] === t);
+    const m = its.reduce((s,i) => s + getPrice(i).m, 0);
+    const l = its.reduce((s,i) => s + getPrice(i).l, 0);
+    const tot = m + l;
+    if (tot === 0) return;
+    gM += m; gL += l;
+    const short = t.replace(/^\d+\.\s+/, '');
+    const d = document.createElement('div');
+    d.className = 'sum-trade';
+    d.innerHTML = `
+      <div class="sum-thdr"><span>${short}</span><span class="ta">${fmt(tot)}</span></div>
+      ${m>0?`<div class="sum-dl"><span>Materials</span><span class="da">${fmt(m)}</span></div>`:''}
+      ${l>0?`<div class="sum-dl"><span>Labor</span><span class="da">${fmt(l)}</span></div>`:''}
+    `;
+    body.appendChild(d);
+  });
+
+  const grand = gM + gL;
+  const td = document.createElement('div');
+  td.className = 'sum-tots';
+  td.innerHTML = `
+    <div class="str"><span class="tl">Materials</span><span class="ta">${fmt(gM)}</span></div>
+    <div class="str"><span class="tl">Labor</span><span class="ta">${fmt(gL)}</span></div>
+    <div class="sgr"><span class="gl">TOTAL REHAB</span><span class="ga">${fmt(grand)}</span></div>
+    <div class="sco"><span class="cl">+ 10% Contingency</span><span class="ca">${fmt(grand*0.1)}</span></div>
+  `;
+  body.appendChild(td);
+}
+
+// ─── BOTTOM SHEETS ────────────────────────────────────────────────────────────
+function openBS(id) {
+  if (id === 'bs-sum') buildSummary();
+  document.getElementById(id).classList.add('open');
+  document.getElementById('ov-' + id).classList.add('open');
+}
+function closeBS(id) {
+  document.getElementById(id).classList.remove('open');
+  document.getElementById('ov-' + id).classList.remove('open');
+}
+
+// ─── SEARCH ───────────────────────────────────────────────────────────────────
+document.getElementById('srch').addEventListener('input', e => {
+  searchQ = e.target.value.trim();
+  document.getElementById('sw-clear').classList.toggle('vis', searchQ.length > 0);
+  render();
+});
+function clrSrch() {
+  document.getElementById('srch').value = '';
+  searchQ = '';
+  document.getElementById('sw-clear').classList.remove('vis');
+  render();
+}
+
+// ─── EXCEL EXPORT ─────────────────────────────────────────────────────────────
+function exportXLSX() {
+  const activeItems = BASE.filter(i => IS[i[0]].qty > 0);
+  if (activeItems.length === 0) {
+    alert('No items with quantities yet — add some quantities first.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // ── COLORS (ARGB) ──
+  const NAVY   = 'FF1A3A5C';
+  const BLUE   = 'FF2563A8';
+  const WHITE  = 'FFFFFFFF';
+  const GREEN  = 'FF1B5E20';
+  const GBGC   = 'FFEEF7EE';
+  const LBGC   = 'FFEEF5FB';
+  const YELLC  = 'FFFFFBE6';
+  const ORANGC = 'FFC55A11';
+  const DARKGRN= 'FF2E7D32';
+  const DARKBLU= 'FF1565C0';
+  const REDBG  = 'FFFFEBEE';
+
+  function cell(v, s) { return { v, s, t: typeof v === 'number' ? 'n' : 's' }; }
+
+  // ── SHEET 1: REHAB BUDGET DETAIL ──
+  const ws1Data = [];
+
+  // Title row
+  ws1Data.push([
+    { v: `FIX & FLIP REHAB BUDGET — ${activeState} MARKET (Labor ×${lMult.toFixed(2)} / Material ×${mMult.toFixed(2)})`,
+      s: { font:{bold:true,sz:13,color:{rgb:WHITE}}, fill:{fgColor:{rgb:NAVY}},
+           alignment:{horizontal:'left',vertical:'center'} } },
+    ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:NAVY}}} })
+  ]);
+
+  // Subheader
+  ws1Data.push([
+    { v: `Prepared for: Hawaii Real Estate Investments  |  Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  Items with quantities: ${activeItems.length}`,
+      s:{font:{italic:true,sz:9,color:{rgb:'FF444444'}},fill:{fgColor:{rgb:'FFF5F8FF'}},alignment:{horizontal:'left'}} },
+    ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:'FFF5F8FF'}}} })
+  ]);
+
+  // Blank row
+  ws1Data.push(Array(11).fill({v:''}));
+
+  // Column headers
+  const hdrs = ['#','Trade','Category','Description','Spec / Brand','Unit','Qty',
+                 'Mat $/Unit','Labor $/Unit','Mat Total','Labor Total','Line Total'];
+  ws1Data.push(hdrs.map(h => ({
+    v: h,
+    s: { font:{bold:true,sz:10,color:{rgb:WHITE}},
+         fill:{fgColor:{rgb:NAVY}},
+         alignment:{horizontal:'center',vertical:'center',wrapText:true},
+         border:{top:{style:'medium'},bottom:{style:'medium'},left:{style:'medium'},right:{style:'medium'}} }
+  })));
+
+  // Group by trade
+  const byTrade = {};
+  activeItems.forEach(item => {
+    if (!byTrade[item[2]]) byTrade[item[2]] = [];
+    byTrade[item[2]].push(item);
+  });
+
+  let tradeMats = {}, tradeLabs = {};
+  TRADE_ORDER.forEach((trade, ti) => {
+    if (!byTrade[trade]) return;
+    const its = byTrade[trade];
+
+    // Trade header row
+    ws1Data.push([
+      { v: trade,
+        s:{ font:{bold:true,sz:10,color:{rgb:WHITE}},
+            fill:{fgColor:{rgb:BLUE}},
+            alignment:{horizontal:'left',vertical:'center'} } },
+      ...Array(10).fill({ v:'', s:{fill:{fgColor:{rgb:BLUE}}} })
+    ]);
+
+    let tradeM=0, tradeL=0;
+    its.forEach((item, idx) => {
+      const s = IS[item[0]];
+      const mR = getMatRate(item);
+      const lR = getLabRate(item);
+      const mT = mR * s.qty;
+      const lT = lR * s.qty;
+      const tot = mT + lT;
+      tradeM += mT; tradeL += lT;
+
+      const shade = idx % 2 === 0 ? WHITE : 'FFF7F9FC';
+      const bord = { top:{style:'thin',color:{rgb:'FFD8E2EF'}}, bottom:{style:'thin',color:{rgb:'FFD8E2EF'}},
+                     left:{style:'thin',color:{rgb:'FFD8E2EF'}}, right:{style:'thin',color:{rgb:'FFD8E2EF'}} };
+      const base = { fill:{fgColor:{rgb:shade}}, border:bord, alignment:{vertical:'center'} };
+
+      const modified = IS[item[0]].matOvr !== null || IS[item[0]].labOvr !== null;
+
+      ws1Data.push([
+        { v:item[1], s:{...base, font:{sz:9,bold:true}, alignment:{horizontal:'center',vertical:'center'}} },
+        { v:item[2].replace(/^\d+\.\s+/,''), s:{...base,font:{sz:9,color:{rgb:'FF6B7D92'}}} },
+        { v:item[3]||'', s:{...base,font:{sz:9,color:{rgb:'FF6B7D92'}}} },
+        { v:item[4], s:{...base,font:{sz:10,bold:true}} },
+        { v:item[5]||'', s:{...base,font:{sz:9,italic:true,color:{rgb:'FF6B7D92'}}} },
+        { v:item[6], s:{...base,font:{sz:10,color:{rgb:'FF6B7D92'}},alignment:{horizontal:'center',vertical:'center'}} },
+        { v:s.qty, s:{...base,font:{sz:11,bold:true},alignment:{horizontal:'center',vertical:'center'},fill:{fgColor:{rgb:YELLC}}} },
+        { v:mR>0?mR:0, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},
+            numFmt:'$#,##0.00',alignment:{horizontal:'right',vertical:'center'}} },
+        { v:lR>0?lR:0, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},
+            numFmt:'$#,##0.00',alignment:{horizontal:'right',vertical:'center'}} },
+        { v:mT, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},
+            numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+        { v:lT, t:'n', s:{...base,font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},
+            numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+        { v:tot, t:'n', s:{...base,font:{sz:10,bold:tot>0},
+            fill:{fgColor:{rgb:tot>0?'FFE8F5E9':shade}},numFmt:'$#,##0',
+            alignment:{horizontal:'right',vertical:'center'}} },
+      ]);
+    });
+
+    tradeMats[trade] = tradeM;
+    tradeLabs[trade] = tradeL;
+
+    // Trade subtotal
+    const tTot = tradeM + tradeL;
+    ws1Data.push([
+      { v:`SUBTOTAL — ${trade}`, s:{font:{bold:true,sz:9,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+          alignment:{horizontal:'left',vertical:'center'}} },
+      ...Array(8).fill({ v:'', s:{fill:{fgColor:{rgb:NAVY}}} }),
+      { v:tradeM, t:'n', s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+      { v:tradeL, t:'n', s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+      { v:tTot, t:'n', s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+          numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+    ]);
+    ws1Data.push(Array(12).fill({v:''})); // spacer
+  });
+
+  // Grand totals
+  let gMat=0, gLab=0;
+  activeItems.forEach(i => { const p=getPrice(i); gMat+=p.m; gLab+=p.l; });
+  const grand = gMat + gLab;
+  const cont = grand * 0.1;
+
+  ws1Data.push(Array(12).fill({v:''}));
+  ws1Data.push([
+    { v:'TOTAL REHAB BUDGET', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+        alignment:{horizontal:'right',vertical:'center'}} },
+    ...Array(8).fill({v:'',s:{fill:{fgColor:{rgb:NAVY}}}}),
+    { v:gMat, t:'n', s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+    { v:gLab, t:'n', s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+    { v:grand, t:'n', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+  ]);
+  ws1Data.push([
+    { v:'10% Contingency Reserve', s:{font:{italic:true,sz:10,color:{rgb:'FF7A5800'}},
+        fill:{fgColor:{rgb:YELLC}},alignment:{horizontal:'right',vertical:'center'}} },
+    ...Array(10).fill({v:'',s:{fill:{fgColor:{rgb:YELLC}}}}),
+    { v:cont, t:'n', s:{font:{bold:true,sz:11,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},
+        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+  ]);
+  ws1Data.push([
+    { v:'TOTAL WITH CONTINGENCY', s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},
+        alignment:{horizontal:'right',vertical:'center'}} },
+    ...Array(10).fill({v:'',s:{fill:{fgColor:{rgb:ORANGC}}}}),
+    { v:grand+cont, t:'n', s:{font:{bold:true,sz:14,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},
+        numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}} },
+  ]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+
+  // Column widths
+  ws1['!cols'] = [
+    {wch:5},{wch:18},{wch:16},{wch:38},{wch:30},{wch:6},
+    {wch:6},{wch:12},{wch:12},{wch:12},{wch:12},{wch:13}
+  ];
+
+  // Row heights
+  ws1['!rows'] = [
+    {hpt:30},{hpt:18},{hpt:8},{hpt:28},
+    ...ws1Data.slice(4).map(() => ({hpt:18}))
+  ];
+
+  // Merge title rows across all 12 columns
+  ws1['!merges'] = [
+    {s:{r:0,c:0},e:{r:0,c:11}},
+    {s:{r:1,c:0},e:{r:1,c:11}},
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'Rehab Budget Detail');
+
+  // ── SHEET 2: TRADE SUMMARY ──
+  const ws2Data = [];
+  ws2Data.push([
+    { v:'REHAB BUDGET — TRADE SUMMARY', s:{font:{bold:true,sz:14,color:{rgb:WHITE}},
+        fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'left',vertical:'center'}} },
+    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
+    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
+    {v:'',s:{fill:{fgColor:{rgb:NAVY}}}},
+  ]);
+  ws2Data.push([
+    { v:`Market: ${STATES.find(s=>s.c===activeState)?.n||activeState}  |  Labor ×${lMult.toFixed(2)}  |  Material ×${mMult.toFixed(2)}`,
+      s:{font:{italic:true,sz:9,color:{rgb:'FF444444'}},fill:{fgColor:{rgb:'FFF5F8FF'}}} },
+    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
+    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
+    {v:'',s:{fill:{fgColor:{rgb:'FFF5F8FF'}}}},
+  ]);
+  ws2Data.push(Array(4).fill({v:''}));
+
+  const sumHdrs = ['Trade','Materials','Labor','Total'];
+  ws2Data.push(sumHdrs.map(h => ({
+    v:h, s:{font:{bold:true,sz:10,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},
+             alignment:{horizontal:h==='Trade'?'left':'right',vertical:'center'},
+             border:{top:{style:'medium'},bottom:{style:'medium'},left:{style:'medium'},right:{style:'medium'}}}
+  })));
+
+  let sumGM=0, sumGL=0;
+  TRADE_ORDER.forEach((t,ti) => {
+    const its = BASE.filter(i => i[2]===t);
+    const m = its.reduce((s,i)=>s+getPrice(i).m,0);
+    const l = its.reduce((s,i)=>s+getPrice(i).l,0);
+    const tot = m+l;
+    if (tot===0) return;
+    sumGM+=m; sumGL+=l;
+    const shade = ti%2===0?WHITE:LBGC;
+    const bord = {top:{style:'thin',color:{rgb:'FFD8E2EF'}},bottom:{style:'thin',color:{rgb:'FFD8E2EF'}},
+                  left:{style:'thin',color:{rgb:'FFD8E2EF'}},right:{style:'thin',color:{rgb:'FFD8E2EF'}}};
+    ws2Data.push([
+      {v:t,s:{font:{sz:10},fill:{fgColor:{rgb:shade}},border:bord,alignment:{horizontal:'left',vertical:'center'}}},
+      {v:m,t:'n',s:{font:{sz:10,color:{rgb:DARKGRN}},fill:{fgColor:{rgb:GBGC}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+      {v:l,t:'n',s:{font:{sz:10,color:{rgb:DARKBLU}},fill:{fgColor:{rgb:LBGC}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+      {v:tot,t:'n',s:{font:{sz:10,bold:true},fill:{fgColor:{rgb:shade}},border:bord,numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+    ]);
+  });
+
+  const sumGrand = sumGM+sumGL;
+  ws2Data.push(Array(4).fill({v:''}));
+  ws2Data.push([
+    {v:'TOTAL REHAB',s:{font:{bold:true,sz:12,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},alignment:{horizontal:'left',vertical:'center'}}},
+    {v:sumGM,t:'n',s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+    {v:sumGL,t:'n',s:{font:{bold:true,sz:11,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+    {v:sumGrand,t:'n',s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:NAVY}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+  ]);
+  ws2Data.push([
+    {v:'+ 10% Contingency',s:{font:{italic:true,sz:10,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},alignment:{horizontal:'left',vertical:'center'}}},
+    {v:'',s:{fill:{fgColor:{rgb:YELLC}}}},{v:'',s:{fill:{fgColor:{rgb:YELLC}}}},
+    {v:sumGrand*.1,t:'n',s:{font:{bold:true,sz:11,color:{rgb:'FF7A5800'}},fill:{fgColor:{rgb:YELLC}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+  ]);
+  ws2Data.push([
+    {v:'TOTAL WITH CONTINGENCY',s:{font:{bold:true,sz:13,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},alignment:{horizontal:'left',vertical:'center'}}},
+    {v:'',s:{fill:{fgColor:{rgb:ORANGC}}}},{v:'',s:{fill:{fgColor:{rgb:ORANGC}}}},
+    {v:sumGrand*1.1,t:'n',s:{font:{bold:true,sz:14,color:{rgb:WHITE}},fill:{fgColor:{rgb:ORANGC}},numFmt:'$#,##0',alignment:{horizontal:'right',vertical:'center'}}},
+  ]);
+
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+  ws2['!cols'] = [{wch:40},{wch:16},{wch:16},{wch:16}];
+  ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Trade Summary');
+
+  // Write
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `rehab_budget_${activeState}_${date}.xlsx`);
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
