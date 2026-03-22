@@ -237,6 +237,7 @@ input[type=number]{-moz-appearance:textfield}
 <div class="bnav">
   <button class="nb sec" onclick="openBS('bs-state')">🌏 State</button>
   <button class="nb sec" onclick="openBS('bs-sum')">📊 Summary</button>
+  <button class="nb sec" onclick="confirmClear()">🗑 Clear</button>
   <button class="nb pri" onclick="exportXLSX()">⬇ Export</button>
 </div>
 </div>
@@ -255,6 +256,20 @@ input[type=number]{-moz-appearance:textfield}
   <div class="bs-handle"></div>
   <div class="bs-title">Cost Summary<button class="bs-close" onclick="closeBS('bs-sum')">✕</button></div>
   <div class="bs-body" id="sum-body"></div>
+</div>
+
+<!-- CONFIRM SHEET -->
+<div class="ov" id="ov-bs-confirm" onclick="closeBS('bs-confirm')"></div>
+<div class="bs" id="bs-confirm">
+  <div class="bs-handle"></div>
+  <div class="bs-title" id="confirm-title">Clear all data?</div>
+  <div class="bs-body" style="padding:0 18px 24px">
+    <p id="confirm-msg" style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.5"></p>
+    <div style="display:flex;gap:10px">
+      <button class="nb sec" style="flex:1;height:48px" onclick="closeBS('bs-confirm')">Cancel</button>
+      <button class="nb pri" id="confirm-ok" style="flex:1;height:48px;background:#c0392b">Clear</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -652,6 +667,7 @@ function render() {
   });
 
   updateStats();
+  saveState();
 }
 
 // ─── STATS ────────────────────────────────────────────────────────────────────
@@ -667,6 +683,9 @@ function updateStats() {
   document.getElementById('s0').textContent = act;
   document.getElementById('s1').textContent = fmt(tM);
   document.getElementById('s2').textContent = fmt(tL);
+  document.getElementById('s3').textContent = activeState;
+  // Sync state grid highlight
+  document.querySelectorAll('.sc').forEach(x => x.classList.toggle('active', x.dataset.code === activeState));
 }
 
 // ─── SUMMARY ──────────────────────────────────────────────────────────────────
@@ -947,9 +966,70 @@ function exportXLSX() {
   XLSX.utils.book_append_sheet(wb, ws2, 'Trade Summary');
   const date = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `rehab_budget_${activeState}_${date}.xlsx`);
+  confirmClearAfterExport();
+}
+
+// ─── PERSISTENCE ──────────────────────────────────────────────────────────────
+const SAVE_KEY = 'rbb-mobile-v1';
+
+function saveState() {
+  try {
+    const rows = {};
+    BASE.forEach(i => {
+      const s = IS[i[0]];
+      if (s.qty !== 0 || s.matOvr !== null || s.labOvr !== null) {
+        rows[i[0]] = { q: s.qty, m: s.matOvr, l: s.labOvr };
+      }
+    });
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ rows, lMult, mMult, activeState }));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return;
+    const p = JSON.parse(raw);
+    if (p.rows) {
+      Object.entries(p.rows).forEach(([row, s]) => {
+        const r = parseInt(row);
+        if (IS[r]) { IS[r].qty = s.q ?? 0; IS[r].matOvr = s.m ?? null; IS[r].labOvr = s.l ?? null; }
+      });
+    }
+    if (p.lMult) lMult = p.lMult;
+    if (p.mMult) mMult = p.mMult;
+    if (p.activeState) {
+      activeState = p.activeState;
+      // s3 label synced after render; state grid synced after buildStateGrid runs
+    }
+  } catch(e) {}
+}
+
+function clearAll() {
+  BASE.forEach(i => { IS[i[0]].qty = 0; IS[i[0]].matOvr = null; IS[i[0]].labOvr = null; });
+  try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
+  closeBS('bs-confirm');
+  render();
+}
+
+function confirmClear() {
+  document.getElementById('confirm-title').textContent = 'Clear all data?';
+  document.getElementById('confirm-msg').textContent = 'This will reset all quantities and price overrides. This cannot be undone.';
+  document.getElementById('confirm-ok').textContent = '🗑 Clear Everything';
+  document.getElementById('confirm-ok').onclick = clearAll;
+  openBS('bs-confirm');
+}
+
+function confirmClearAfterExport() {
+  document.getElementById('confirm-title').textContent = 'Export complete!';
+  document.getElementById('confirm-msg').textContent = 'Your Excel file has been saved. Would you like to clear the budget and start fresh for a new property?';
+  document.getElementById('confirm-ok').textContent = '🗑 Clear & Start Over';
+  document.getElementById('confirm-ok').onclick = clearAll;
+  openBS('bs-confirm');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+loadState();
 render();
 </script>
 </body>
