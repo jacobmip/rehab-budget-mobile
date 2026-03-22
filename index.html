@@ -434,17 +434,20 @@ function adjQ(row, d) {
   if (IS[row].qty > 0) IS[row].inc = 1;
   updateRow(row);
   updateStats();
+  saveState();
 }
 function setQ(row, v) {
   IS[row].qty = Math.max(0, parseInt(v) || 0);
   if (IS[row].qty > 0) IS[row].inc = 1;
   updateRow(row);
   updateStats();
+  saveState();
 }
 function togInc(row) {
   IS[row].inc = IS[row].inc === 1 ? 0 : 1;
   updateRow(row);
   updateStats();
+  saveState();
 }
 
 // ─── PRICE EDITING ───────────────────────────────────────────────────────────
@@ -484,6 +487,7 @@ function applyPrice(row, type, val) {
   else IS[row].labOvr = n === 0 && BASE.find(i=>i[0]===row)[8] === 0 ? null : n;
   updateRow(row);
   updateStats();
+  saveState();
 }
 
 function resetPrice(row) {
@@ -498,6 +502,7 @@ function resetPrice(row) {
   }
   updateRow(row);
   updateStats();
+  saveState();
 }
 
 // ─── UPDATE SINGLE ROW ────────────────────────────────────────────────────────
